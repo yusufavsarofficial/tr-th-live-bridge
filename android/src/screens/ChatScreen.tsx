@@ -11,39 +11,62 @@ import { connectSocket, disconnectSocket, getSocket } from "../services/socket";
 import { theme } from "../theme/theme";
 import { createCallId } from "../utils/call";
 
-type Props = { session: Session; onLogout: () => void; onOpenCall: (callId: string) => void };
+type Props = { session: Session; onLogout: () => void; onOpenCall: (callId: string) => void; onIncomingCall: (callId: string) => void };
 
-export function ChatScreen({ session, onLogout, onOpenCall }: Props) {
+export function ChatScreen({ session, onLogout, onOpenCall, onIncomingCall }: Props) {
   const labels = getStrings(session.user.lang);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [text, setText] = useState("");
   const [online, setOnline] = useState<string[]>([]);
   const [typingUser, setTypingUser] = useState("");
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [notice, setNotice] = useState("");
   const partner = session.user.username === "Yusuf" ? "Neeja" : "Yusuf";
   const partnerOnline = online.includes(partner);
-  const messageLabels = useMemo(() => ({ original: labels.original, translation: labels.translation, play: labels.play, read: labels.read }), [labels]);
+  const messageLabels = useMemo(() => ({ original: labels.original, translation: labels.translation, voiceText: labels.voiceText, play: labels.play, read: labels.read }), [labels]);
 
   useEffect(() => {
     const socket = connectSocket(session.token);
-    socket.on(SOCKET_EVENTS.MESSAGE_NEW, (message: ChatMessage) => {
+    const onMessageNew = (message: ChatMessage) => {
       setMessages((current) => [...current, message]);
       if (message.sender_username !== session.user.username) socket.emit(SOCKET_EVENTS.MESSAGE_READ, { messageId: message.id });
-    });
-    socket.on(SOCKET_EVENTS.MESSAGE_READ_RECEIPT, ({ messageId, readBy }: { messageId: string; readBy: string }) => {
+    };
+    const onReadReceipt = ({ messageId, readBy }: { messageId: string; readBy: string }) => {
       setMessages((current) => current.map((item) => item.id === messageId && !item.read_by.includes(readBy) ? { ...item, read_by: [...item.read_by, readBy] } : item));
-    });
-    socket.on(SOCKET_EVENTS.PRESENCE_UPDATE, ({ online: nextOnline }: { online: string[] }) => setOnline(nextOnline));
-    socket.on(SOCKET_EVENTS.TYPING_START, ({ username }: { username: string }) => setTypingUser(username));
-    socket.on(SOCKET_EVENTS.TYPING_STOP, () => setTypingUser(""));
-    socket.on(SOCKET_EVENTS.CALL_INCOMING, ({ callId }: { callId: string }) => onOpenCall(callId));
-    return () => disconnectSocket();
-  }, [onOpenCall, session.token, session.user.username]);
+    };
+    const onPresence = ({ online: nextOnline }: { online: string[] }) => setOnline(nextOnline);
+    const onTypingStart = ({ username }: { username: string }) => setTypingUser(username);
+    const onTypingStop = () => setTypingUser("");
+    const onIncoming = ({ callId }: { callId: string }) => onIncomingCall(callId);
+    const onError = ({ error, recoverable }: { error: string; recoverable?: boolean }) => {
+      if (recoverable) setNotice(error);
+    };
+
+    socket.on(SOCKET_EVENTS.MESSAGE_NEW, onMessageNew);
+    socket.on(SOCKET_EVENTS.MESSAGE_READ_RECEIPT, onReadReceipt);
+    socket.on(SOCKET_EVENTS.PRESENCE_UPDATE, onPresence);
+    socket.on(SOCKET_EVENTS.TYPING_START, onTypingStart);
+    socket.on(SOCKET_EVENTS.TYPING_STOP, onTypingStop);
+    socket.on(SOCKET_EVENTS.CALL_INCOMING, onIncoming);
+    socket.on(SOCKET_EVENTS.ERROR, onError);
+
+    return () => {
+      socket.off(SOCKET_EVENTS.MESSAGE_NEW, onMessageNew);
+      socket.off(SOCKET_EVENTS.MESSAGE_READ_RECEIPT, onReadReceipt);
+      socket.off(SOCKET_EVENTS.PRESENCE_UPDATE, onPresence);
+      socket.off(SOCKET_EVENTS.TYPING_START, onTypingStart);
+      socket.off(SOCKET_EVENTS.TYPING_STOP, onTypingStop);
+      socket.off(SOCKET_EVENTS.CALL_INCOMING, onIncoming);
+      socket.off(SOCKET_EVENTS.ERROR, onError);
+    };
+  }, [onIncomingCall, session.token, session.user.username]);
 
   function sendText() {
     const trimmed = text.trim();
     if (!trimmed) return;
-    getSocket()?.emit(SOCKET_EVENTS.MESSAGE_SEND, { text: trimmed, messageType: "text" });
+    getSocket()?.emit(SOCKET_EVENTS.MESSAGE_SEND, { text: trimmed, messageType: "text" }, (ack: { ok: boolean; error?: string }) => {
+      if (!ack.ok) setNotice(ack.error || "MESSAGE_SEND_FAILED");
+    });
     getSocket()?.emit(SOCKET_EVENTS.TYPING_STOP);
     setText("");
   }
@@ -52,7 +75,16 @@ export function ChatScreen({ session, onLogout, onOpenCall }: Props) {
     if (recording) {
       const uri = await stopRecording(recording);
       setRecording(null);
-      if (uri) getSocket()?.emit(SOCKET_EVENTS.MESSAGE_SEND, { audioUrl: await uploadAudio(uri, session.token), messageType: "audio" });
+      if (uri) {
+        const uploaded = await uploadAudio(uri, session.token);
+        getSocket()?.emit(SOCKET_EVENTS.MESSAGE_SEND, {
+          audioUrl: uploaded.audioUrl,
+          text: uploaded.originalText,
+          translatedText: uploaded.translatedText,
+          messageType: "audio"
+        });
+        if (uploaded.warning) setNotice(uploaded.warning);
+      }
       return;
     }
     setRecording(await startRecording());
@@ -77,6 +109,7 @@ export function ChatScreen({ session, onLogout, onOpenCall }: Props) {
         </View>
       </View>
       <FlatList style={styles.list} data={messages} keyExtractor={(item) => item.id} renderItem={({ item }) => <MessageBubble message={item} mine={item.sender_username === session.user.username} read={item.read_by.includes(partner)} labels={messageLabels} />} />
+      {notice ? <Text style={styles.notice}>{notice}</Text> : null}
       {typingUser ? <Text style={styles.typing}>{labels.typing}</Text> : null}
       <View style={styles.composer}>
         <TextInput style={styles.messageInput} value={text} onChangeText={(value) => { setText(value); getSocket()?.emit(value ? SOCKET_EVENTS.TYPING_START : SOCKET_EVENTS.TYPING_STOP); }} placeholder={labels.messagePlaceholder} placeholderTextColor={theme.colors.muted} />
@@ -95,6 +128,7 @@ const styles = StyleSheet.create({
   headerActions: { flexDirection: "row", gap: theme.spacing.sm },
   list: { flex: 1, padding: theme.spacing.md },
   typing: { color: theme.colors.muted, paddingHorizontal: theme.spacing.md },
+  notice: { color: theme.colors.muted, paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.xs },
   composer: { padding: theme.spacing.md, gap: theme.spacing.sm, borderTopWidth: 1, borderColor: theme.colors.border },
   messageInput: { minHeight: 46, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface, color: theme.colors.text, paddingHorizontal: theme.spacing.md }
 });

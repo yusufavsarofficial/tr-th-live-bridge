@@ -8,11 +8,13 @@ import { getStoredSession, Session } from "./src/services/auth";
 import { theme } from "./src/theme/theme";
 
 type Screen = "login" | "chat" | "call";
+type CallMode = "incoming" | "outgoing";
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [screen, setScreen] = useState<Screen>("login");
   const [callId, setCallId] = useState<string | null>(null);
+  const [callMode, setCallMode] = useState<CallMode>("outgoing");
 
   useEffect(() => {
     getStoredSession().then((stored) => {
@@ -27,8 +29,8 @@ export default function App() {
     <SafeAreaView style={styles.root}>
       <StatusBar style="light" />
       {screen === "login" || !session ? <LoginScreen onLogin={(next) => { setSession(next); setScreen("chat"); }} /> : null}
-      {screen === "chat" && session ? <ChatScreen session={session} onLogout={() => { setSession(null); setScreen("login"); }} onOpenCall={(nextCallId) => { setCallId(nextCallId); setScreen("call"); }} /> : null}
-      {screen === "call" && session ? <VideoCallScreen session={session} callId={callId} onClose={() => { setCallId(null); setScreen("chat"); }} /> : null}
+      {screen === "chat" && session ? <ChatScreen session={session} onLogout={() => { setSession(null); setScreen("login"); }} onOpenCall={(nextCallId) => { setCallId(nextCallId); setCallMode("outgoing"); setScreen("call"); }} onIncomingCall={(nextCallId) => { setCallId(nextCallId); setCallMode("incoming"); setScreen("call"); }} /> : null}
+      {screen === "call" && session ? <VideoCallScreen session={session} callId={callId} mode={callMode} onClose={() => { setCallId(null); setScreen("chat"); }} /> : null}
     </SafeAreaView>
   );
 }

@@ -16,13 +16,25 @@ export async function stopRecording(recording: Audio.Recording) {
   return recording.getURI();
 }
 
-export async function uploadAudio(uri: string, token: string) {
+export type UploadedAudio = {
+  audioUrl: string;
+  originalText: string;
+  translatedText: string;
+  warning?: string;
+};
+
+export async function uploadAudio(uri: string, token: string): Promise<UploadedAudio> {
   const form = new FormData();
   form.append("audio", { uri, name: "voice-message.m4a", type: "audio/m4a" } as unknown as string);
   const response = await axios.post(`${BACKEND_URL}/api/uploads/audio`, form, {
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "multipart/form-data" }
   });
-  return response.data.audioUrl as string;
+  return {
+    audioUrl: response.data.audioUrl as string,
+    originalText: response.data.originalText || "",
+    translatedText: response.data.translatedText || "",
+    warning: response.data.warning
+  };
 }
 
 export async function playAudio(url: string) {

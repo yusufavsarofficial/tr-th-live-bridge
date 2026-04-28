@@ -4,6 +4,7 @@ const { translateMessage } = require("../services/translationService");
 const { SOCKET_EVENTS } = require("./events");
 
 const onlineUsers = new Map();
+const MAX_TEXT_LENGTH = 4000;
 
 function emitPresence(io) {
   io.emit(SOCKET_EVENTS.PRESENCE_UPDATE, { online: Array.from(onlineUsers.keys()) });
@@ -30,14 +31,29 @@ function registerSockets(io) {
 
     socket.on(SOCKET_EVENTS.MESSAGE_SEND, async (payload = {}, callback) => {
       try {
+        const messageType = payload.messageType === "audio" ? "audio" : "text";
+        const originalText = String(payload.text || "").slice(0, MAX_TEXT_LENGTH);
         const targetLang = user.lang === "tr" ? "th" : "tr";
-        const translatedText = payload.messageType === "audio" ? "" : await translateMessage(payload.text || "", user.lang, targetLang);
+        let translatedText = String(payload.translatedText || "").slice(0, MAX_TEXT_LENGTH);
+
+        if (messageType === "text") {
+          try {
+            translatedText = await translateMessage(originalText, user.lang, targetLang);
+          } catch (error) {
+            translatedText = "";
+            socket.emit(SOCKET_EVENTS.ERROR, {
+              error: error.code || "TRANSLATION_FAILED",
+              recoverable: true
+            });
+          }
+        }
+
         const result = await pool.query(
           `INSERT INTO messages
             (room_code, sender_username, sender_display_name, sender_lang, target_lang, original_text, translated_text, audio_url, message_type)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
            RETURNING id, sender_username, sender_display_name, sender_lang, target_lang, original_text, translated_text, audio_url, message_type, read_by, created_at`,
-          ["private-room", user.username, user.displayName, user.lang, targetLang, payload.text || "", translatedText, payload.audioUrl || null, payload.messageType || "text"]
+          ["private-room", user.username, user.displayName, user.lang, targetLang, originalText, translatedText, payload.audioUrl || null, messageType]
         );
         const message = result.rows[0];
         io.to("private-room").emit(SOCKET_EVENTS.MESSAGE_NEW, message);

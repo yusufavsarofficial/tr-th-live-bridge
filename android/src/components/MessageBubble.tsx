@@ -18,7 +18,7 @@ type Props = {
   message: ChatMessage;
   mine: boolean;
   read: boolean;
-  labels: { original: string; translation: string; play: string; read: string };
+  labels: { original: string; translation: string; voiceText: string; play: string; read: string };
 };
 
 export function MessageBubble({ message, mine, read, labels }: Props) {
@@ -27,7 +27,21 @@ export function MessageBubble({ message, mine, read, labels }: Props) {
       <View style={[styles.bubble, mine ? styles.mine : styles.other]}>
         <Text style={styles.sender}>{message.sender_username}</Text>
         {message.message_type === "audio" && message.audio_url ? (
-          <Button label={labels.play} onPress={() => playAudio(message.audio_url || "")} variant="ghost" />
+          <>
+            <Button label={labels.play} onPress={() => playAudio(message.audio_url || "")} variant="ghost" />
+            {message.original_text ? (
+              <>
+                <Text style={styles.caption}>{labels.voiceText}</Text>
+                <Text style={styles.text}>{message.original_text}</Text>
+              </>
+            ) : null}
+            {message.translated_text ? (
+              <>
+                <Text style={styles.caption}>{labels.translation}</Text>
+                <Text style={styles.translation}>{message.translated_text}</Text>
+              </>
+            ) : null}
+          </>
         ) : (
           <>
             <Text style={styles.caption}>{labels.original}</Text>

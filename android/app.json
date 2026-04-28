@@ -2,7 +2,7 @@
   "expo": {
     "name": "Sevgilim Chat",
     "slug": "sevgilim-chat",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "scheme": "sevgilimchat",
@@ -11,6 +11,7 @@
     ],
     "android": {
       "package": "com.sevgilimchat.android",
+      "versionCode": 2,
       "permissions": [
         "CAMERA",
         "RECORD_AUDIO",
