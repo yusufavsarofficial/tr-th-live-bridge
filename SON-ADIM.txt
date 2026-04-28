@@ -1,0 +1,18 @@
+SEVGILIM CHAT - SON TESLIM ADIMLARI
+
+1. PostgreSQL veritabanini olustur.
+2. Render/Railway backend servisinde docs/07-RENDER-ENV-LISTESI.md dosyasindaki environment variable degerlerini gir.
+3. USER_A_PASSWORD ve USER_B_PASSWORD alanlarinda bcrypt hash kullan.
+4. OPENAI_API_KEY degerini sadece backend environment olarak gir.
+5. Backend servisini deploy et.
+6. https://CANLI-BACKEND-URL/health endpointini kontrol et.
+7. android/src/config/backend.ts icindeki BACKEND_URL degerini canli backend URL yap.
+8. android klasorunde npm run check calistir.
+9. eas login yap.
+10. eas build -p android --profile preview komutuyla APK al.
+11. APK'yi telefona yukle.
+12. Yusuf ve Neeja ile oda kodu Sadeceikimizsevgilim kullanarak test et.
+13. Goruntulu gorusme baglanmazsa TURN server ekle.
+
+Teslim notu:
+.env dosyasi yoktur. Gercek secret yoktur. Android icinde gizli bilgi yoktur.

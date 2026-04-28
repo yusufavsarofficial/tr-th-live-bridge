@@ -1,0 +1,40 @@
+{
+    "expo":  {
+                 "name":  "Sevgilim Chat",
+                 "slug":  "sevgilim-chat",
+                 "version":  "1.0.0",
+                 "orientation":  "portrait",
+                 "userInterfaceStyle":  "dark",
+                 "scheme":  "sevgilimchat",
+                 "assetBundlePatterns":  [
+                                             "**/*"
+                                         ],
+                 "android":  {
+                                 "package":  "com.sevgilimchat.android",
+                                 "permissions":  [
+                                                     "CAMERA",
+                                                     "RECORD_AUDIO",
+                                                     "MODIFY_AUDIO_SETTINGS"
+                                                 ]
+                             },
+                 "plugins":  [
+                                 "@config-plugins/react-native-webrtc",
+                                 [
+                                     "expo-camera",
+                                     {
+                                         "cameraPermission":  "Goruntulu gorusme icin kamera izni gerekir.",
+                                         "microphonePermission":  "Sesli mesaj ve gorusme icin mikrofon izni gerekir."
+                                     }
+                                 ],
+                                 [
+                                     "expo-av",
+                                     {
+                                         "microphonePermission":  "Sesli mesaj kaydetmek icin mikrofon izni gerekir."
+                                     }
+                                 ]
+                             ],
+                 "platforms":  [
+                                   "android"
+                               ]
+             }
+}

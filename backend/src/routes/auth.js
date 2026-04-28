@@ -1,0 +1,23 @@
+﻿const bcrypt = require("bcryptjs");
+const express = require("express");
+const { env } = require("../config/env");
+const { createToken } = require("../middleware/auth");
+
+const router = express.Router();
+
+router.post("/api/auth/login", async (req, res) => {
+  const { username, password, roomCode } = req.body || {};
+  if (roomCode !== env.privateRoomCode) return res.status(403).json({ error: "INVALID_ROOM_CODE" });
+
+  const user = env.getUsers().find((item) => item.username === username);
+  if (!user) return res.status(401).json({ error: "INVALID_CREDENTIALS" });
+  if (!user.passwordHash.startsWith("$2")) return res.status(500).json({ error: "PASSWORD_HASH_NOT_CONFIGURED" });
+
+  const validPassword = await bcrypt.compare(password || "", user.passwordHash);
+  if (!validPassword) return res.status(401).json({ error: "INVALID_CREDENTIALS" });
+
+  const publicUser = { username: user.username, displayName: user.displayName, lang: user.lang };
+  return res.json({ token: createToken(publicUser), user: publicUser });
+});
+
+module.exports = { authRouter: router };

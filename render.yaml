@@ -1,0 +1,52 @@
+services:
+  - type: web
+    name: sevgilim-chat-backend
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm install
+    startCommand: npm run start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: MESSAGE_ENCRYPTION_KEY
+        sync: false
+      - key: PRIVATE_ROOM_CODE
+        value: Sadeceikimizsevgilim
+      - key: USER_A_USERNAME
+        value: Yusuf
+      - key: USER_A_DISPLAY_NAME
+        value: Yusuf
+      - key: USER_A_PASSWORD
+        sync: false
+      - key: USER_A_LANG
+        value: tr
+      - key: USER_B_USERNAME
+        value: Neeja
+      - key: USER_B_DISPLAY_NAME
+        value: Neeja
+      - key: USER_B_PASSWORD
+        sync: false
+      - key: USER_B_LANG
+        value: th
+      - key: TRANSLATION_PROVIDER
+        value: openai
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: CORS_ORIGIN
+        value: '*'
+      - key: TURN_URL
+        sync: false
+      - key: TURN_USERNAME
+        sync: false
+      - key: TURN_PASSWORD
+        sync: false
