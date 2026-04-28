@@ -36,3 +36,18 @@ Helmet, CORS, rate limit, JWT auth ve audio upload sinirlari kullanilir. Sifrele
 ## Socket eventleri
 
 Eventler `src/sockets/events.js` icindedir. Android `android/src/config/socketEvents.ts` ile birebir eslesmelidir.
+
+## Docker Deploy
+
+Render Docker ayarlari:
+
+```text
+Language: Docker
+Root Directory: backend
+Dockerfile Path: ./Dockerfile
+Instance Type: Free
+```
+
+`backend/Dockerfile` Node.js LTS image kullanir, `/app` dizininde calisir, `npm ci --omit=dev` ile production bagimliliklarini kurar ve `npm run start` ile server baslatir.
+
+`.env` dosyasi image icine kopyalanmaz. Tum secret degerler Render Environment panelinden girilir.

@@ -75,3 +75,16 @@ Gercek connection string Android icine veya dokumana yazilmaz.
 ## OpenAI API key
 
 OpenAI API key sadece Render Environment icindeki `OPENAI_API_KEY` alanina yazilir. Android icine yazilmaz.
+
+## Render Docker ayarlari
+
+Render New Web Service ekraninda Node secenegi gorunmuyorsa Docker ile deploy et.
+
+```text
+Language: Docker
+Root Directory: backend
+Dockerfile Path: ./Dockerfile
+Instance Type: Free
+```
+
+Environment Variables yine Render panelinde girilir. `.env` dosyasi GitHub'a veya Docker image icine eklenmez.

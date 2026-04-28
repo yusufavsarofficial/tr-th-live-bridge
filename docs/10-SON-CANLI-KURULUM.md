@@ -90,3 +90,16 @@ EAS build tamamlaninca Expo panelindeki APK linkinden dosyayi indir.
 - Goruntulu gorusme
 
 Goruntulu gorusme baglanmazsa TURN server bilgilerini backend environment alanlarina ekle.
+
+## Docker ile Render deploy
+
+Render'da Language alaninda Node gorunmuyorsa Docker sec.
+
+```text
+Language: Docker
+Root Directory: backend
+Dockerfile Path: ./Dockerfile
+Instance Type: Free
+```
+
+Sonra Environment alanlarina `docs/07-RENDER-ENV-LISTESI.md` dosyasindaki degerleri gir. Gercek gizli bilgileri sadece Render paneline yaz.

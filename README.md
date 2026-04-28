@@ -93,3 +93,16 @@ node scripts/generate-secrets.js
 ```
 
 Bu scriptler `.env` dosyasi olusturmaz ve Android icine gizli bilgi yazmaz.
+
+## Render Docker Deploy
+
+Render New Web Service ekraninda Language olarak sadece Docker gorunuyorsa su ayarlari kullan:
+
+```text
+Language: Docker
+Root Directory: backend
+Dockerfile Path: ./Dockerfile
+Instance Type: Free
+```
+
+Environment Variables yine Render panelinden girilir. Gercek API key, DATABASE_URL, JWT_SECRET, MESSAGE_ENCRYPTION_KEY ve sifreler Docker image icine yazilmaz.
