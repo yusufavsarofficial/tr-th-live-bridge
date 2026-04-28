@@ -1,1 +1,1 @@
-export const BACKEND_URL = "https://sevgilim-chat-backend.onrender.com";
+export const BACKEND_URL = "https://sevgilim-chat.onrender.com";
