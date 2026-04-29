@@ -9,9 +9,11 @@ const { SOCKET_EVENTS } = require("./events");
 const onlineUsers = new Map();
 const MAX_TEXT_LENGTH = 4000;
 const MAX_CALL_ID_LENGTH = 120;
+const MAX_CLIENT_ID_LENGTH = 160;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CALL_ID_RE = /^[a-zA-Z0-9._:-]{1,120}$/;
-const TRANSLATION_FAILED_TEXT = "Ceviri alinamadi";
+const CLIENT_ID_RE = /^[a-zA-Z0-9._:-]{1,160}$/;
+const TRANSLATION_FAILED_TEXT = "Çeviri alınamadı";
 
 function getPartnerUsername(username) {
   return username === "Yusuf" ? "Neeja" : "Yusuf";
@@ -43,7 +45,7 @@ async function translateAndUpdateMessage(io, message, originalText, sourceLang, 
           status = CASE WHEN status = 'sending' THEN 'sent' ELSE status END,
           updated_at = NOW()
       WHERE id = $1
-      RETURNING id, sender_username, sender_display_name, receiver_username, sender_lang, target_lang,
+      RETURNING id, client_id, sender_username, sender_display_name, receiver_username, sender_lang, target_lang,
         original_text, translated_text, audio_url,
         original_text_encrypted, translated_text_encrypted, audio_url_encrypted,
         message_type, status, read_by, created_at, updated_at
@@ -56,7 +58,7 @@ async function translateAndUpdateMessage(io, message, originalText, sourceLang, 
       SET translated_text_encrypted = $2,
           updated_at = NOW()
       WHERE id = $1
-      RETURNING id, sender_username, sender_display_name, receiver_username, sender_lang, target_lang,
+      RETURNING id, client_id, sender_username, sender_display_name, receiver_username, sender_lang, target_lang,
         original_text, translated_text, audio_url,
         original_text_encrypted, translated_text_encrypted, audio_url_encrypted,
         message_type, status, read_by, created_at, updated_at
@@ -99,18 +101,38 @@ function registerSockets(io) {
         const targetLang = user.lang === "tr" ? "th" : "tr";
         const translatedText = messageType === "audio" ? String(payload.translatedText || "").slice(0, MAX_TEXT_LENGTH) : "";
         const receiverUsername = getPartnerUsername(user.username);
+        const rawClientId = String(payload.clientId || "").slice(0, MAX_CLIENT_ID_LENGTH);
+        const clientId = CLIENT_ID_RE.test(rawClientId) ? rawClientId : null;
+
+        if (clientId) {
+          const existing = await pool.query(`
+            SELECT id, client_id, sender_username, sender_display_name, receiver_username, sender_lang, target_lang,
+              original_text, translated_text, audio_url,
+              original_text_encrypted, translated_text_encrypted, audio_url_encrypted,
+              message_type, status, read_by, created_at, updated_at
+            FROM messages
+            WHERE client_id = $1 AND sender_username = $2
+            LIMIT 1
+          `, [clientId, user.username]);
+          if (existing.rowCount) {
+            const message = serializeMessage(existing.rows[0]);
+            if (callback) callback({ ok: true, message });
+            return;
+          }
+        }
 
         const result = await pool.query(
           `INSERT INTO messages
-            (room_code, sender_username, sender_display_name, sender_lang, target_lang,
+            (room_code, client_id, sender_username, sender_display_name, sender_lang, target_lang,
              receiver_username, original_text_encrypted, translated_text_encrypted, audio_url_encrypted, message_type, status)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'sent')
-           RETURNING id, sender_username, sender_display_name, receiver_username, sender_lang, target_lang,
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'sent')
+           RETURNING id, client_id, sender_username, sender_display_name, receiver_username, sender_lang, target_lang,
              original_text, translated_text, audio_url,
              original_text_encrypted, translated_text_encrypted, audio_url_encrypted,
              message_type, status, read_by, created_at, updated_at`,
           [
             "private-room",
+            clientId,
             user.username,
             user.displayName,
             user.lang,
@@ -122,7 +144,7 @@ function registerSockets(io) {
             messageType
           ]
         );
-        const message = { ...serializeMessage(result.rows[0]), client_id: String(payload.clientId || "") || undefined };
+        const message = serializeMessage(result.rows[0]);
         io.to("private-room").emit(SOCKET_EVENTS.MESSAGE_NEW, message);
         sendPushToPartner(user.username, {
           title: user.displayName || user.username,

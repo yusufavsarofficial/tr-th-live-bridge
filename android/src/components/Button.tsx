@@ -51,6 +51,6 @@ const styles = StyleSheet.create({
   ghost: { backgroundColor: theme.colors.surfaceSoft, borderWidth: 1, borderColor: theme.colors.border },
   pressed: { opacity: 0.72 },
   label: { color: theme.colors.primaryText, fontWeight: "800", fontSize: 14 },
-  iconLabel: { color: theme.colors.text, fontSize: 22, fontWeight: "800" },
+  iconLabel: { color: theme.colors.text, fontSize: 13, fontWeight: "800" },
   ghostLabel: { color: theme.colors.text }
 });

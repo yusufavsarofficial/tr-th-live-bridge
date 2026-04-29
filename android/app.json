@@ -25,7 +25,9 @@
       "blockedPermissions": [
         "android.permission.SYSTEM_ALERT_WINDOW",
         "android.permission.WAKE_LOCK",
-        "android.permission.BLUETOOTH"
+        "android.permission.BLUETOOTH",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
       ],
       "permissions": [
         "android.permission.ACCESS_NETWORK_STATE",
@@ -41,26 +43,27 @@
       ]
     },
     "plugins": [
+      "./plugins/withAndroidReleaseHardening",
       "@config-plugins/react-native-webrtc",
       [
         "expo-camera",
         {
-          "cameraPermission": "Goruntulu gorusme icin kamera izni gerekir.",
-          "microphonePermission": "Sesli mesaj ve gorusme icin mikrofon izni gerekir."
+          "cameraPermission": "Görüntülü görüşme için kamera izni gerekir.",
+          "microphonePermission": "Sesli mesaj ve görüşme için mikrofon izni gerekir."
         }
       ],
       [
         "expo-av",
         {
-          "microphonePermission": "Sesli mesaj kaydetmek icin mikrofon izni gerekir."
+          "microphonePermission": "Sesli mesaj kaydetmek için mikrofon izni gerekir."
         }
       ],
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Guvenlik konumu icin konum izni gerekir.",
-          "locationAlwaysPermission": "Guvenlik konumu arka planda calisabilmek icin konum izni ister.",
-          "locationWhenInUsePermission": "Guvenlik konumu icin konum izni gerekir."
+          "locationAlwaysAndWhenInUsePermission": "Güvenlik konumu için konum izni gerekir.",
+          "locationAlwaysPermission": "Güvenlik konumu arka planda çalışabilmek için konum izni ister.",
+          "locationWhenInUsePermission": "Güvenlik konumu için konum izni gerekir."
         }
       ],
       [

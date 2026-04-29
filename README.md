@@ -117,6 +117,12 @@ Socket.IO WebSocket'i oncelikli kullanir, polling sadece geri dusus olarak kalir
 
 Baglanti koparsa uygulama yeniden baglanmayi dener ve kullaniciya sade durum mesaji gosterir. Render Free plan uyku gecikmesi varsa ilk istek birkac saniye surebilir.
 
+Android her mesaj icin `clientId` uretir. Backend bu `clientId` degerini saklar; ayni mesaj reconnect veya ack gecikmesi nedeniyle tekrar gelirse ikinci kayit olusturulmaz. Uygulama one geldiginde ve socket tekrar baglandiginda son mesaj gecmisi yeniden cekilir.
+
+## Kalici Oturum
+
+Basarili giriste token ve kullanici bilgisi `expo-secure-store` icinde saklanir. Uygulama acilirken `/api/auth/verify` ile token kontrol edilir; token gecersizse guvenli cikis yapilir ve kullanici yeniden girise yonlendirilir. Oda kodu yalnizca giris sirasinda sorulur.
+
 ## Goruntulu Gorusme
 
 WebRTC eventleri backend ve Android tarafinda ayni tutulur:
@@ -146,7 +152,9 @@ Bazi Turkiye-Tayland mobil aglarinda STUN yeterli olmayabilir. Bu durumda backen
 
 ## Sesli Mesaj
 
-Sesli mesaj upload endpoint'i JWT ile korunur. Backend ses dosyasi boyutunu sinirlar ve sadece ses MIME/uzantilarini kabul eder. Buyuk dosyada kullaniciya sade hata gosterilir.
+Sesli mesaj upload endpoint'i JWT ile korunur. Backend ses dosyasi boyutunu 5 MB ile sinirlar ve sadece ses MIME/uzantilarini kabul eder. Buyuk dosyada kullaniciya sade hata gosterilir.
+
+Sesli mesaj yuklenince backend kullanicinin diline gore transkripsiyon ve Turkce-Tayca ceviri dener. OpenAI veya transkripsiyon hatasi olursa ses dosyasi yine gonderilir; metin/ceviri alani sade hata durumuyla gosterilir.
 
 ## Guvenlik Konumu ve Acik Riza
 

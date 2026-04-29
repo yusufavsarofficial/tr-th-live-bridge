@@ -7,6 +7,7 @@ const rateLimit = require("express-rate-limit");
 const { Server } = require("socket.io");
 const { env } = require("./config/env");
 const { initDb } = require("./db/init");
+const { authMiddleware } = require("./middleware/auth");
 const { healthRouter } = require("./routes/health");
 const { authRouter } = require("./routes/auth");
 const { callsRouter } = require("./routes/calls");
@@ -73,7 +74,7 @@ app.get("/", (req, res) => res.json({
   health: "/health"
 }));
 app.get("/apk/sevgilim-chat.apk", (req, res) => streamApk(res, apkDownloadUrl));
-app.get("/api/rtc-config", (req, res) => {
+app.get("/api/rtc-config", authMiddleware, (req, res) => {
   const iceServers = [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:global.stun.twilio.com:3478" }];
   if (env.turn.url && env.turn.username && env.turn.password) {
     iceServers.push({ urls: env.turn.url, username: env.turn.username, credential: env.turn.password });

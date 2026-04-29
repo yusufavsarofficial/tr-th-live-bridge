@@ -25,7 +25,7 @@ type QualityMode = "low" | "balanced" | "high";
 const screen = Dimensions.get("window");
 const fallbackRtcConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:global.stun.twilio.com:3478" }] };
 const qualityModes: Record<QualityMode, { label: string; width: number; height: number; fps: number; bitrate: number }> = {
-  low: { label: "Dusuk veri", width: 480, height: 360, fps: 15, bitrate: 280000 },
+  low: { label: "Düşük veri", width: 480, height: 360, fps: 15, bitrate: 280000 },
   balanced: { label: "Dengeli", width: 640, height: 480, fps: 20, bitrate: 650000 },
   high: { label: "Daha iyi", width: 720, height: 540, fps: 24, bitrate: 1100000 }
 };
@@ -104,20 +104,31 @@ export function VideoCallScreen({ session, callId, mode, onClose }: Props) {
   useEffect(() => {
     const socket = getSocket();
     if (!socket) {
-      setStatus("Baglanti kurulamadi, tekrar deneyin.");
+      setStatus("Bağlantı kurulamadı, tekrar deneyin.");
       return;
     }
 
-    const onAccepted = async () => {
+    const onAccepted = async (payload: { callId: string }) => {
+      if (payload.callId !== callId) return;
       setAccepted(true);
       setStatus(labels.waitingForVideo);
       await createOffer();
     };
-    const onRejected = () => closeCall(false);
-    const onEnded = () => closeCall(false);
-    const onOffer = (payload: { offer: any }) => handleOffer(payload);
-    const onAnswer = (payload: { answer: any }) => handleAnswer(payload);
-    const onIce = (payload: { candidate: any }) => handleIceCandidate(payload);
+    const onRejected = (payload: { callId: string }) => {
+      if (payload.callId === callId) closeCall(false);
+    };
+    const onEnded = (payload: { callId: string }) => {
+      if (payload.callId === callId) closeCall(false);
+    };
+    const onOffer = (payload: { callId: string; offer: any }) => {
+      if (payload.callId === callId) handleOffer(payload);
+    };
+    const onAnswer = (payload: { callId: string; answer: any }) => {
+      if (payload.callId === callId) handleAnswer(payload);
+    };
+    const onIce = (payload: { callId: string; candidate: any }) => {
+      if (payload.callId === callId) handleIceCandidate(payload);
+    };
     const onVoiceTranslation = (payload: { callId: string; translatedText?: string; originalText?: string }) => {
       if (payload.callId === callId) setCallTranslation(payload.translatedText || payload.originalText || "");
     };
@@ -175,10 +186,10 @@ export function VideoCallScreen({ session, callId, mode, onClose }: Props) {
       if (event.candidate) getSocket()?.emit(SOCKET_EVENTS.WEBRTC_ICE_CANDIDATE, { callId, candidate: event.candidate });
     });
     peer.addEventListener("connectionstatechange", () => {
-      if (["failed", "disconnected"].includes(peer.connectionState)) setStatus("Baglanti kurulamadi, tekrar deneyin.");
+      if (["failed", "disconnected"].includes(peer.connectionState)) setStatus("Bağlantı kurulamadı, tekrar deneyin.");
     });
     peer.addEventListener("iceconnectionstatechange", () => {
-      if (["failed", "disconnected"].includes(peer.iceConnectionState)) setStatus("Baglanti zayif, kalite dusuruldu.");
+      if (["failed", "disconnected"].includes(peer.iceConnectionState)) setStatus("Bağlantı zayıf, kalite düşürüldü.");
     });
     await applySenderParameters(quality, peer);
     return peer;
@@ -212,7 +223,7 @@ export function VideoCallScreen({ session, callId, mode, onClose }: Props) {
       await peer.setLocalDescription(offer);
       getSocket()?.emit(SOCKET_EVENTS.WEBRTC_OFFER, { callId, offer });
     } catch {
-      setStatus("Baglanti kurulamadi, tekrar deneyin.");
+      setStatus("Bağlantı kurulamadı, tekrar deneyin.");
     }
   }
 
@@ -226,7 +237,7 @@ export function VideoCallScreen({ session, callId, mode, onClose }: Props) {
       await peer.setLocalDescription(answer);
       getSocket()?.emit(SOCKET_EVENTS.WEBRTC_ANSWER, { callId, answer });
     } catch {
-      setStatus("Baglanti kurulamadi, tekrar deneyin.");
+      setStatus("Bağlantı kurulamadı, tekrar deneyin.");
     }
   }
 
@@ -236,7 +247,7 @@ export function VideoCallScreen({ session, callId, mode, onClose }: Props) {
       await peer.setRemoteDescription(new RTCSessionDescription(answer));
       await flushPendingCandidates();
     } catch {
-      setStatus("Baglanti kurulamadi, tekrar deneyin.");
+      setStatus("Bağlantı kurulamadı, tekrar deneyin.");
     }
   }
 
@@ -255,10 +266,14 @@ export function VideoCallScreen({ session, callId, mode, onClose }: Props) {
   }
 
   async function acceptCall() {
-    await ensurePeer();
-    setAccepted(true);
-    setStatus(labels.waitingForVideo);
-    getSocket()?.emit(SOCKET_EVENTS.CALL_ACCEPT, { callId });
+    try {
+      await ensurePeer();
+      setAccepted(true);
+      setStatus(labels.waitingForVideo);
+      getSocket()?.emit(SOCKET_EVENTS.CALL_ACCEPT, { callId });
+    } catch {
+      setStatus("Kamera ve mikrofon izni gerekli.");
+    }
   }
 
   function rejectCall() {
@@ -297,21 +312,25 @@ export function VideoCallScreen({ session, callId, mode, onClose }: Props) {
   }
 
   async function toggleCallTranslation() {
-    if (session.user.username !== "Neeja") return;
-    if (translationRecording) {
-      const uri = await stopRecording(translationRecording);
-      setTranslationRecording(null);
-      if (!uri || !callId) return;
-      const uploaded = await uploadAudio(uri, session.token);
-      getSocket()?.emit(SOCKET_EVENTS.CALL_VOICE_TRANSLATION, {
-        callId,
-        originalText: uploaded.originalText,
-        translatedText: uploaded.translatedText
-      });
-      setCallTranslation(uploaded.translatedText || uploaded.originalText || uploaded.warning || "");
-      return;
+    try {
+      if (session.user.username !== "Neeja") return;
+      if (translationRecording) {
+        const uri = await stopRecording(translationRecording);
+        setTranslationRecording(null);
+        if (!uri || !callId) return;
+        const uploaded = await uploadAudio(uri, session.token);
+        getSocket()?.emit(SOCKET_EVENTS.CALL_VOICE_TRANSLATION, {
+          callId,
+          originalText: uploaded.originalText,
+          translatedText: uploaded.translatedText
+        });
+        setCallTranslation(uploaded.translatedText || uploaded.originalText || uploaded.warning || "");
+        return;
+      }
+      setTranslationRecording(await startRecording());
+    } catch {
+      setStatus("Mikrofon izni gerekli.");
     }
-    setTranslationRecording(await startRecording());
   }
 
   function closeCall(emitEnd: boolean) {
@@ -349,17 +368,17 @@ export function VideoCallScreen({ session, callId, mode, onClose }: Props) {
             <RTCView streamURL={localStream.toURL()} style={styles.localVideo} objectFit="cover" mirror />
             {beautyEnabled ? <View style={styles.beautyOverlay} /> : null}
           </View>
-        ) : <Text style={styles.localHint}>Kamera aciliyor...</Text>}
+        ) : <Text style={styles.localHint}>Kamera açılıyor...</Text>}
       </View>
 
       <View style={[styles.controls, mini && styles.controlsMini]}>
         {showAcceptControls ? <Button label={labels.accept} onPress={acceptCall} /> : null}
         {showAcceptControls ? <Button label={labels.reject} onPress={rejectCall} variant="ghost" /> : null}
-        {!showAcceptControls && !mini ? <Button label={cameraEnabled ? "Kamera" : "Kamera kapali"} onPress={toggleCamera} variant="ghost" /> : null}
+        {!showAcceptControls && !mini ? <Button label={cameraEnabled ? "Kamera" : "Kamera kapalı"} onPress={toggleCamera} variant="ghost" /> : null}
         {!showAcceptControls && !mini ? <Button label={micEnabled ? "Mikrofon" : "Sessiz"} onPress={toggleMic} variant="ghost" /> : null}
-        {!showAcceptControls && !mini ? <Button label="Cevir" onPress={flipCamera} variant="ghost" /> : null}
+        {!showAcceptControls && !mini ? <Button label="Çevir" onPress={flipCamera} variant="ghost" /> : null}
         {!showAcceptControls && !mini ? <Button label={qualityModes[quality].label} onPress={cycleQuality} variant="ghost" /> : null}
-        {!showAcceptControls && !mini ? <Button label={beautyEnabled ? "Yumusak acik" : "Yumusak"} onPress={() => setBeautyEnabled((value) => !value)} variant="ghost" /> : null}
+        {!showAcceptControls && !mini ? <Button label={beautyEnabled ? "Yumuşak açık" : "Yumuşak"} onPress={() => setBeautyEnabled((value) => !value)} variant="ghost" /> : null}
         {session.user.username === "Neeja" && !mini ? <Button label={translationRecording ? labels.stopTranslateVoice : labels.translateVoice} onPress={toggleCallTranslation} variant="ghost" /> : null}
         <Button label={mini ? labels.expand : labels.minimize} onPress={() => setMini((value) => !value)} variant="ghost" />
         <Button label={labels.end} onPress={endCall} variant="danger" />

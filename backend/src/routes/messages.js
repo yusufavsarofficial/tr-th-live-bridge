@@ -7,12 +7,12 @@ const router = express.Router();
 
 router.get("/api/messages", authMiddleware, async (req, res) => {
   const result = await pool.query(`
-    SELECT id, sender_username, sender_display_name, receiver_username, sender_lang, target_lang,
+    SELECT id, client_id, sender_username, sender_display_name, receiver_username, sender_lang, target_lang,
       original_text, translated_text, audio_url,
       original_text_encrypted, translated_text_encrypted, audio_url_encrypted,
       message_type, status, read_by, created_at, updated_at
     FROM (
-      SELECT id, sender_username, sender_display_name, receiver_username, sender_lang, target_lang,
+      SELECT id, client_id, sender_username, sender_display_name, receiver_username, sender_lang, target_lang,
         original_text, translated_text, audio_url,
         original_text_encrypted, translated_text_encrypted, audio_url_encrypted,
         message_type, status, read_by, created_at, updated_at

@@ -4,12 +4,13 @@ const crypto = require("crypto");
 const express = require("express");
 const multer = require("multer");
 const { authMiddleware } = require("../middleware/auth");
-const { transcribeNeejaAudio } = require("../services/speechService");
+const { transcribeAudio } = require("../services/speechService");
 
 const uploadDir = path.resolve(__dirname, "../../uploads");
 fs.mkdirSync(uploadDir, { recursive: true });
 const allowedExtensions = new Set([".aac", ".m4a", ".mp3", ".ogg", ".wav", ".webm"]);
 const MAX_AUDIO_BYTES = 5 * 1024 * 1024;
+const AUDIO_TRANSLATION_FAILED_TEXT = "Çeviri alınamadı";
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
@@ -36,13 +37,14 @@ router.post("/api/uploads/audio", authMiddleware, upload.single("audio"), async 
   if (!req.file) return res.status(400).json({ error: "AUDIO_FILE_REQUIRED" });
   let speech = { originalText: "", translatedText: "" };
 
-  if (req.user.username === "Neeja") {
-    try {
-      speech = await transcribeNeejaAudio(req.file.path);
-    } catch (error) {
-      speech = { originalText: "", translatedText: "", warning: error.code || "AUDIO_TRANSLATION_FAILED" };
-    }
+  try {
+    const targetLang = req.user.lang === "tr" ? "th" : "tr";
+    speech = await transcribeAudio(req.file.path, req.user.lang, targetLang);
+  } catch (error) {
+    speech = { originalText: "", translatedText: AUDIO_TRANSLATION_FAILED_TEXT, warning: error.code || "AUDIO_TRANSLATION_FAILED" };
   }
+  if (speech.warning && !speech.translatedText) speech.translatedText = AUDIO_TRANSLATION_FAILED_TEXT;
+  if (speech.warning) speech.warning = "AUDIO_TRANSLATION_FAILED";
 
   return res.json({
     audioUrl: `/uploads/${req.file.filename}`,

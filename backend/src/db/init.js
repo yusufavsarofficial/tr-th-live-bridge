@@ -12,6 +12,7 @@ async function initDb() {
       sender_display_name TEXT NOT NULL,
       sender_lang TEXT NOT NULL,
       target_lang TEXT NOT NULL,
+      client_id TEXT,
       original_text TEXT,
       translated_text TEXT,
       audio_url TEXT,
@@ -26,6 +27,7 @@ async function initDb() {
   await pool.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS original_text_encrypted TEXT;");
   await pool.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS translated_text_encrypted TEXT;");
   await pool.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS audio_url_encrypted TEXT;");
+  await pool.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS client_id TEXT;");
   await pool.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS receiver_username TEXT;");
   await pool.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'sent';");
   await pool.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();");
@@ -36,6 +38,7 @@ async function initDb() {
   `);
   await pool.query("CREATE INDEX IF NOT EXISTS idx_messages_room_created_at ON messages (room_code, created_at DESC);");
   await pool.query("CREATE INDEX IF NOT EXISTS idx_messages_sender_created_at ON messages (sender_username, created_at DESC);");
+  await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_client_id ON messages (client_id) WHERE client_id IS NOT NULL;");
 
   const plaintextRows = await pool.query(`
     SELECT id, original_text, translated_text, audio_url

@@ -34,11 +34,23 @@ async function postLocation(session: Session, location: Location.LocationObject)
     accuracy: location.coords.accuracy
   };
 
+  const socket = getSocket();
+  if (socket?.connected) {
+    socket.emit(SOCKET_EVENTS.LOCATION_UPDATE, payload, (ack?: { ok?: boolean }) => {
+      if (!ack?.ok) {
+        axios.post(`${BACKEND_URL}/api/location`, payload, {
+          headers: { Authorization: `Bearer ${session.token}` },
+          timeout: 12000
+        }).catch(() => undefined);
+      }
+    });
+    return;
+  }
+
   await axios.post(`${BACKEND_URL}/api/location`, payload, {
     headers: { Authorization: `Bearer ${session.token}` },
     timeout: 12000
   });
-  getSocket()?.emit(SOCKET_EVENTS.LOCATION_UPDATE, payload);
 }
 
 TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
@@ -109,7 +121,7 @@ export async function startLocationSharing(session: Session) {
       pausesUpdatesAutomatically: true,
       foregroundService: {
         notificationTitle: "Sevgilim Chat",
-        notificationBody: "Sevgilim Chat guvenlik konumu aktif",
+        notificationBody: "Sevgilim Chat güvenlik konumu aktif",
         notificationColor: "#00A884"
       }
     }).catch(() => undefined);

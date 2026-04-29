@@ -4,6 +4,7 @@ const { authMiddleware } = require("../middleware/auth");
 
 const router = express.Router();
 const LOCATION_TTL_HOURS = 24;
+const MIN_LOCATION_INTERVAL_SECONDS = 45;
 
 function parseCoordinate(value, min, max) {
   const next = Number(value);
@@ -35,6 +36,15 @@ async function saveLocation(username, payload = {}) {
   }
 
   await pool.query("DELETE FROM location_shares WHERE expires_at < NOW();");
+  const recent = await pool.query(`
+    SELECT id, user_id, latitude, longitude, accuracy, created_at, expires_at
+    FROM location_shares
+    WHERE user_id = $1 AND created_at > NOW() - ($2::INT * INTERVAL '1 second') AND expires_at > NOW()
+    ORDER BY created_at DESC
+    LIMIT 1
+  `, [username, MIN_LOCATION_INTERVAL_SECONDS]);
+  if (recent.rowCount) return serializeLocation(recent.rows[0]);
+
   const result = await pool.query(`
     INSERT INTO location_shares (user_id, latitude, longitude, accuracy, expires_at)
     VALUES ($1, $2, $3, $4, NOW() + ($5::INT * INTERVAL '1 hour'))

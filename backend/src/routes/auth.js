@@ -2,7 +2,7 @@
 const express = require("express");
 const rateLimit = require("express-rate-limit");
 const { env } = require("../config/env");
-const { createToken } = require("../middleware/auth");
+const { authMiddleware, createToken } = require("../middleware/auth");
 
 const router = express.Router();
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false });
@@ -25,6 +25,17 @@ router.post("/api/auth/login", loginLimiter, async (req, res) => {
 
   const publicUser = { username: user.username, displayName: user.displayName, lang: user.lang };
   return res.json({ token: createToken(publicUser), user: publicUser });
+});
+
+router.get("/api/auth/verify", authMiddleware, (req, res) => {
+  res.json({
+    ok: true,
+    user: {
+      username: req.user.username,
+      displayName: req.user.displayName,
+      lang: req.user.lang
+    }
+  });
 });
 
 module.exports = { authRouter: router };

@@ -43,6 +43,8 @@ function decryptValue(value) {
 function serializeMessage(row) {
   return {
     id: row.id,
+    clientId: row.client_id || undefined,
+    client_id: row.client_id || undefined,
     sender: row.sender_username,
     receiver: row.receiver_username,
     sender_username: row.sender_username,
@@ -57,7 +59,9 @@ function serializeMessage(row) {
     original_text: decryptValue(row.original_text_encrypted || row.original_text || ""),
     translated_text: decryptValue(row.translated_text_encrypted || row.translated_text || ""),
     audio_url: decryptValue(row.audio_url_encrypted || row.audio_url || "") || null,
+    audioUrl: decryptValue(row.audio_url_encrypted || row.audio_url || "") || null,
     message_type: row.message_type,
+    type: row.message_type,
     status: row.status || "sent",
     read_by: row.read_by || [],
     created_at: row.created_at,

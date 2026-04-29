@@ -20,7 +20,7 @@ export function LocationConsentScreen({ session, onDone }: Props) {
     const started = await requestAndStartLocation(session).catch(() => false);
     setBusy(false);
     if (!started) {
-      setNotice("Konum izni verilmedi. Daha sonra ayarlardan acabilirsin.");
+      setNotice("Konum izni verilmedi. Daha sonra ayarlardan açabilirsin.");
     }
     onDone();
   }
@@ -33,11 +33,11 @@ export function LocationConsentScreen({ session, onDone }: Props) {
   return (
     <View style={styles.container}>
       <View style={styles.panel}>
-        <Text style={styles.title}>Guvenlik Konumu Onayi</Text>
+        <Text style={styles.title}>Güvenlik Konumu Onayı</Text>
         <Text style={styles.copy}>
-          Guvenlik konumu ozelligi, yalnizca Yusuf ve Neeja arasinda guvenlik amaciyla konum paylasimi yapmak icin kullanilir.
-          Kabul edersen, uygulama Android'in izin verdigi olcude konumunu guncelleyebilir. Konum paylasimi cihaz izinlerine,
-          pil optimizasyonuna ve Android arka plan kurallarina bagli olarak calisir. Istedigin zaman ayarlardan kapatabilirsin.
+          Güvenlik konumu özelliği, yalnızca Yusuf ve Neeja arasında güvenlik amacıyla konum paylaşımı yapmak için kullanılır.
+          Kabul edersen, uygulama Android'in izin verdiği ölçüde konumunu güncelleyebilir. Konum paylaşımı cihaz izinlerine,
+          pil optimizasyonuna ve Android arka plan kurallarına bağlı olarak çalışır. İstediğin zaman ayarlardan kapatabilirsin.
         </Text>
         {notice ? <Text style={styles.notice}>{notice}</Text> : null}
         <View style={styles.actions}>

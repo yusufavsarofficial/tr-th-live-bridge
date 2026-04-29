@@ -49,14 +49,14 @@ export function SettingsScreen({ session, onClose, onLogout }: Props) {
 
   async function enableLocation() {
     const ok = await requestAndStartLocation(session).catch(() => false);
-    setNotice(ok ? "Guvenlik konumu aktif." : "Konum izni gerekli.");
+    setNotice(ok ? "Güvenlik konumu aktif." : "Konum izni gerekli.");
     await refresh();
   }
 
   async function disableLocation() {
     await rejectLocationConsent();
     setLocationEnabled(false);
-    setNotice("Guvenlik konumu kapatildi.");
+    setNotice("Güvenlik konumu kapatıldı.");
   }
 
   async function logout() {
@@ -74,22 +74,22 @@ export function SettingsScreen({ session, onClose, onLogout }: Props) {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Guvenlik konumu</Text>
-        <Text style={styles.line}>Durum: {locationEnabled ? "Aktif" : "Kapali"}</Text>
-        <Text style={styles.line}>Son gonderim: {timeLabel(ownLocation?.createdAt)}</Text>
+        <Text style={styles.sectionTitle}>Güvenlik konumu</Text>
+        <Text style={styles.line}>Durum: {locationEnabled ? "Aktif" : "Kapalı"}</Text>
+        <Text style={styles.line}>Son gönderim: {timeLabel(ownLocation?.createdAt)}</Text>
         <Text style={styles.line}>Son konum: {timeLabel(partnerLocation?.createdAt)}</Text>
         <View style={styles.actions}>
-          {locationEnabled ? <Button label="Konumu kapat" onPress={disableLocation} variant="ghost" /> : <Button label="Konumu ac" onPress={enableLocation} />}
-          {partnerLocation ? <Button label="Haritada ac" onPress={() => openLocationInMaps(partnerLocation)} variant="ghost" /> : null}
+          {locationEnabled ? <Button label="Konumu kapat" onPress={disableLocation} variant="ghost" /> : <Button label="Konumu aç" onPress={enableLocation} />}
+          {partnerLocation ? <Button label="Haritada aç" onPress={() => openLocationInMaps(partnerLocation)} variant="ghost" /> : null}
           <Button label="Yenile" onPress={refresh} variant="ghost" />
         </View>
         <Text style={styles.small}>
-          Konum sadece acik riza ile calisir. Android pil ve arka plan kurallari nedeniyle uygulama zorla kapatilinca durabilir.
+          Konum sadece açık rıza ile çalışır. Android pil ve arka plan kuralları nedeniyle uygulama zorla kapatılınca durabilir.
         </Text>
       </View>
 
       {notice ? <Text style={styles.notice}>{notice}</Text> : null}
-      <Button label="Cikis yap" onPress={logout} variant="danger" />
+      <Button label="Çıkış yap" onPress={logout} variant="danger" />
     </View>
   );
 }

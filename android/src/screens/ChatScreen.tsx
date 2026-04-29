@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Audio } from "expo-av";
 import axios from "axios";
 import {
+  AppState,
   FlatList,
   KeyboardAvoidingView,
   NativeScrollEvent,
@@ -37,16 +38,16 @@ type Ack = { ok: boolean; error?: string; message?: ChatMessage };
 
 function normalizeMessage(message: Partial<ChatMessage> & Record<string, unknown>): ChatMessage {
   return {
-    id: String(message.id || message.client_id || `local-${Date.now()}`),
-    client_id: typeof message.client_id === "string" ? message.client_id : undefined,
+    id: String(message.id || message.client_id || message.clientId || `local-${Date.now()}`),
+    client_id: typeof message.client_id === "string" ? message.client_id : typeof message.clientId === "string" ? message.clientId : undefined,
     sender_username: String(message.sender_username || message.sender || ""),
     receiver_username: typeof message.receiver_username === "string" ? message.receiver_username : undefined,
     sender_lang: typeof message.sender_lang === "string" ? message.sender_lang : typeof message.senderLang === "string" ? message.senderLang : undefined,
     target_lang: typeof message.target_lang === "string" ? message.target_lang : typeof message.targetLang === "string" ? message.targetLang : undefined,
     original_text: String(message.original_text || message.originalText || ""),
     translated_text: String(message.translated_text || message.translatedText || ""),
-    audio_url: typeof message.audio_url === "string" ? message.audio_url : null,
-    message_type: message.message_type === "audio" ? "audio" : "text",
+    audio_url: typeof message.audio_url === "string" ? message.audio_url : typeof message.audioUrl === "string" ? message.audioUrl : null,
+    message_type: message.message_type === "audio" || message.type === "audio" ? "audio" : "text",
     status: message.status === "sending" || message.status === "sent" || message.status === "delivered" || message.status === "read" || message.status === "failed" ? message.status : "sent",
     read_by: Array.isArray(message.read_by) ? message.read_by.map(String) : [],
     created_at: typeof message.created_at === "string" ? message.created_at : typeof message.createdAt === "string" ? message.createdAt : new Date().toISOString(),
@@ -55,13 +56,26 @@ function normalizeMessage(message: Partial<ChatMessage> & Record<string, unknown
 }
 
 function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]) {
-  const withoutOptimistic = current.filter((message) => !incoming.some((next) => next.client_id && message.id === next.client_id));
   const byId = new Map<string, ChatMessage>();
-  [...withoutOptimistic, ...incoming].forEach((message) => byId.set(message.id, { ...(byId.get(message.id) || {}), ...message }));
+  const byClientId = new Map<string, string>();
+
+  [...current, ...incoming].forEach((message) => {
+    const existingKey = message.client_id ? byClientId.get(message.client_id) : undefined;
+    let key = existingKey || message.id;
+    if (existingKey && existingKey !== message.id && !message.id.startsWith("local-")) {
+      byId.delete(existingKey);
+      key = message.id;
+    }
+    const previous = byId.get(key);
+    const merged = { ...(previous || {}), ...message };
+    byId.set(key, { ...merged, id: key });
+    if (message.client_id) byClientId.set(message.client_id, key);
+  });
+
   return Array.from(byId.values()).sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
 }
 
-export function ChatScreen({ session, onOpenSettings, onOpenCall, onIncomingCall }: Props) {
+export function ChatScreen({ session, onLogout, onOpenSettings, onOpenCall, onIncomingCall }: Props) {
   const labels = getStrings(session.user.lang);
   const listRef = useRef<FlatList<ChatMessage>>(null);
   const atBottomRef = useRef(true);
@@ -94,10 +108,11 @@ export function ChatScreen({ session, onOpenSettings, onOpenCall, onIncomingCall
     if (code === "BAGLANTI_YOK") return labels.noConnection;
     if (code === "BAGLANTI_KONTROL_EDILIYOR") return labels.reconnecting;
     if (code === "SUNUCU_UYANIYOR") return labels.wakingServer;
-    if (code === "AUDIO_FILE_TOO_LARGE") return "Sesli mesaj cok buyuk.";
+    if (code === "AUDIO_FILE_TOO_LARGE") return "Sesli mesaj çok büyük.";
+    if (code === "AUDIO_TRANSLATION_FAILED") return "Ses çevirisi alınamadı.";
     if (code === "MICROPHONE_PERMISSION_REQUIRED") return "Mikrofon izni gerekli.";
-    if (code === "INVALID_TOKEN") return "Oturum suresi doldu, tekrar giris yap.";
-    return "Gecici bir sorun olustu, tekrar deneyin.";
+    if (code === "INVALID_TOKEN") return "Oturum süresi doldu, tekrar giriş yap.";
+    return "Geçici bir sorun oluştu, tekrar deneyin.";
   }
 
   function scrollToEnd(animated = true) {
@@ -114,19 +129,37 @@ export function ChatScreen({ session, onOpenSettings, onOpenCall, onIncomingCall
 
   useEffect(() => {
     let active = true;
+    let loadingHistory = false;
     const socket = connectSocket(session.token);
     registerForPushNotifications(session.token);
 
-    axios.get(`${BACKEND_URL}/api/messages`, {
-      headers: { Authorization: `Bearer ${session.token}` },
-      timeout: 15000
-    }).then((response) => {
-      if (!active) return;
-      const nextMessages = ((response.data?.messages || []) as Array<Partial<ChatMessage> & Record<string, unknown>>).map(normalizeMessage);
-      setMessages((current) => mergeMessages(current, nextMessages));
-      nextMessages.forEach((message) => markIncomingAsSeen(socket, message));
-      scrollToEnd(false);
-    }).catch((error) => setNotice(error?.response?.status === 401 ? friendlyNotice("INVALID_TOKEN") : "Mesaj gecmisi yuklenemedi."));
+    async function loadHistory(silent = false) {
+      if (loadingHistory) return;
+      loadingHistory = true;
+      try {
+        const response = await axios.get(`${BACKEND_URL}/api/messages`, {
+          headers: { Authorization: `Bearer ${session.token}` },
+          timeout: 15000
+        });
+        if (!active) return;
+        const nextMessages = ((response.data?.messages || []) as Array<Partial<ChatMessage> & Record<string, unknown>>).map(normalizeMessage);
+        setMessages((current) => mergeMessages(current, nextMessages));
+        nextMessages.forEach((message) => markIncomingAsSeen(socket, message));
+        if (!silent || atBottomRef.current) scrollToEnd(false);
+      } catch (error) {
+        if (!active) return;
+        if (axios.isAxiosError(error) && error.response?.status === 401) {
+          setNotice(friendlyNotice("INVALID_TOKEN"));
+          setTimeout(onLogout, 1200);
+          return;
+        }
+        if (!silent) setNotice("Mesaj geçmişi yüklenemedi.");
+      } finally {
+        loadingHistory = false;
+      }
+    }
+
+    loadHistory();
 
     axios.get(`${BACKEND_URL}/api/calls/pending`, {
       headers: { Authorization: `Bearer ${session.token}` },
@@ -162,7 +195,10 @@ export function ChatScreen({ session, onOpenSettings, onOpenCall, onIncomingCall
     };
     const onTypingStop = () => setTypingUser("");
     const onIncoming = ({ callId }: { callId: string }) => onIncomingCall(callId);
-    const onConnect = () => setNotice("");
+    const onConnect = () => {
+      setNotice("");
+      loadHistory(true);
+    };
     const onDisconnect = () => setNotice(friendlyNotice("BAGLANTI_KONTROL_EDILIYOR"));
     const onReconnectAttempt = (attempt: number) => setNotice(attempt > 1 ? friendlyNotice("SUNUCU_UYANIYOR") : friendlyNotice("BAGLANTI_KONTROL_EDILIYOR"));
     const onConnectError = () => setNotice(friendlyNotice("SUNUCU_UYANIYOR"));
@@ -184,9 +220,16 @@ export function ChatScreen({ session, onOpenSettings, onOpenCall, onIncomingCall
     socket.on(SOCKET_EVENTS.TYPING_STOP, onTypingStop);
     socket.on(SOCKET_EVENTS.CALL_INCOMING, onIncoming);
     socket.on(SOCKET_EVENTS.ERROR, onError);
+    const appStateSubscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        if (!socket.connected) socket.connect();
+        loadHistory(true);
+      }
+    });
 
     return () => {
       active = false;
+      appStateSubscription.remove();
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
       socket.io.off("reconnect_attempt", onReconnectAttempt);
@@ -331,7 +374,7 @@ export function ChatScreen({ session, onOpenSettings, onOpenCall, onIncomingCall
           </View>
         </View>
         <View style={styles.headerActions}>
-          <Button label="Cam" onPress={startCall} variant="icon" />
+          <Button label={labels.call} onPress={startCall} variant="icon" />
           <Button label="Ayar" onPress={onOpenSettings} variant="icon" />
         </View>
       </View>
@@ -388,9 +431,9 @@ export function ChatScreen({ session, onOpenSettings, onOpenCall, onIncomingCall
             multiline
             maxLength={4000}
           />
-          <Button label={recording ? "Stop" : "Mic"} onPress={toggleRecording} variant="icon" />
+          <Button label={recording ? labels.stop : labels.record} onPress={toggleRecording} variant="icon" />
         </View>
-        <Button label={text.trim() ? "Send" : "Cam"} onPress={text.trim() ? sendText : startCall} style={styles.sendButton} />
+        <Button label={text.trim() ? labels.send : labels.call} onPress={text.trim() ? sendText : startCall} style={styles.sendButton} />
       </View>
     </KeyboardAvoidingView>
   );
@@ -467,5 +510,5 @@ const styles = StyleSheet.create({
     paddingTop: 9,
     paddingBottom: 8
   },
-  sendButton: { width: 54, height: 46, minHeight: 46, paddingHorizontal: 0 }
+  sendButton: { width: 64, height: 46, minHeight: 46, paddingHorizontal: 0 }
 });

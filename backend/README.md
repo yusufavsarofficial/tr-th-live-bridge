@@ -27,6 +27,7 @@ Zorunlu alanlar: `PORT`, `DATABASE_URL`, `JWT_SECRET`, `MESSAGE_ENCRYPTION_KEY`,
 
 - `GET /health`
 - `POST /api/auth/login`
+- `GET /api/auth/verify`
 - `GET /api/messages`
 - `GET /api/location/latest`
 - `POST /api/location`
