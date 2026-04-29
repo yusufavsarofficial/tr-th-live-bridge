@@ -8,6 +8,7 @@
     border: "#24333C",
     primary: "#00A884",
     primaryText: "#FFFFFF",
+    heart: "#E53935",
     danger: "#FF6B6B",
     bubbleMine: "#005C4B",
     bubbleOther: "#202C33"

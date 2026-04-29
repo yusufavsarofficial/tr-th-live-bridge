@@ -1,6 +1,7 @@
 ﻿const { verifyToken } = require("../middleware/auth");
 const { pool } = require("../db/pool");
 const { translateMessage } = require("../services/translationService");
+const { sendPushToPartner } = require("../services/pushService");
 const { SOCKET_EVENTS } = require("./events");
 
 const onlineUsers = new Map();
@@ -62,6 +63,11 @@ function registerSockets(io) {
         );
         const message = result.rows[0];
         io.to("private-room").emit(SOCKET_EVENTS.MESSAGE_NEW, message);
+        sendPushToPartner(user.username, {
+          title: user.displayName || user.username,
+          body: messageType === "audio" ? "Sesli mesaj" : originalText.slice(0, 120),
+          data: { type: "message", messageId: message.id }
+        });
         if (callback) callback({ ok: true, message });
       } catch (error) {
         const code = error.code || "MESSAGE_SEND_FAILED";
@@ -99,10 +105,35 @@ function registerSockets(io) {
       if (!validCallId(payload)) return socket.emit(SOCKET_EVENTS.ERROR, { error: "INVALID_CALL_ID", recoverable: true });
       socket.to("private-room").emit(outgoingEvent, { ...payload, from: user.username });
     };
-    socket.on(SOCKET_EVENTS.CALL_START, forwardCall(SOCKET_EVENTS.CALL_START, SOCKET_EVENTS.CALL_INCOMING));
-    socket.on(SOCKET_EVENTS.CALL_ACCEPT, forwardCall(SOCKET_EVENTS.CALL_ACCEPT, SOCKET_EVENTS.CALL_ACCEPTED));
-    socket.on(SOCKET_EVENTS.CALL_REJECT, forwardCall(SOCKET_EVENTS.CALL_REJECT, SOCKET_EVENTS.CALL_REJECTED));
-    socket.on(SOCKET_EVENTS.CALL_END, forwardCall(SOCKET_EVENTS.CALL_END, SOCKET_EVENTS.CALL_ENDED));
+    socket.on(SOCKET_EVENTS.CALL_START, async (payload = {}) => {
+      if (!validCallId(payload)) return socket.emit(SOCKET_EVENTS.ERROR, { error: "INVALID_CALL_ID", recoverable: true });
+      await pool.query(`
+        INSERT INTO call_events (room_code, call_id, caller_username, status)
+        VALUES ($1, $2, $3, 'ringing')
+        ON CONFLICT (call_id) DO NOTHING
+      `, ["private-room", payload.callId, user.username]);
+      socket.to("private-room").emit(SOCKET_EVENTS.CALL_INCOMING, { ...payload, from: user.username });
+      sendPushToPartner(user.username, {
+        title: user.displayName || user.username,
+        body: "Goruntulu arama",
+        data: { type: "call", callId: payload.callId }
+      });
+    });
+    socket.on(SOCKET_EVENTS.CALL_ACCEPT, async (payload = {}) => {
+      if (!validCallId(payload)) return socket.emit(SOCKET_EVENTS.ERROR, { error: "INVALID_CALL_ID", recoverable: true });
+      await pool.query("UPDATE call_events SET status = 'answered', answered_at = NOW() WHERE call_id = $1", [payload.callId]);
+      socket.to("private-room").emit(SOCKET_EVENTS.CALL_ACCEPTED, { ...payload, from: user.username });
+    });
+    socket.on(SOCKET_EVENTS.CALL_REJECT, async (payload = {}) => {
+      if (!validCallId(payload)) return socket.emit(SOCKET_EVENTS.ERROR, { error: "INVALID_CALL_ID", recoverable: true });
+      await pool.query("UPDATE call_events SET status = 'rejected', ended_at = NOW() WHERE call_id = $1", [payload.callId]);
+      socket.to("private-room").emit(SOCKET_EVENTS.CALL_REJECTED, { ...payload, from: user.username });
+    });
+    socket.on(SOCKET_EVENTS.CALL_END, async (payload = {}) => {
+      if (!validCallId(payload)) return socket.emit(SOCKET_EVENTS.ERROR, { error: "INVALID_CALL_ID", recoverable: true });
+      await pool.query("UPDATE call_events SET status = 'ended', ended_at = NOW() WHERE call_id = $1", [payload.callId]);
+      socket.to("private-room").emit(SOCKET_EVENTS.CALL_ENDED, { ...payload, from: user.username });
+    });
     socket.on(SOCKET_EVENTS.WEBRTC_OFFER, forwardCall(SOCKET_EVENTS.WEBRTC_OFFER, SOCKET_EVENTS.WEBRTC_OFFER));
     socket.on(SOCKET_EVENTS.WEBRTC_ANSWER, forwardCall(SOCKET_EVENTS.WEBRTC_ANSWER, SOCKET_EVENTS.WEBRTC_ANSWER));
     socket.on(SOCKET_EVENTS.WEBRTC_ICE_CANDIDATE, forwardCall(SOCKET_EVENTS.WEBRTC_ICE_CANDIDATE, SOCKET_EVENTS.WEBRTC_ICE_CANDIDATE));

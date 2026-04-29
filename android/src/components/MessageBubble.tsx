@@ -12,6 +12,7 @@ export type ChatMessage = {
   audio_url?: string | null;
   message_type: "text" | "audio";
   read_by: string[];
+  created_at?: string;
 };
 
 type Props = {

@@ -8,6 +8,9 @@ const { env } = require("./config/env");
 const { initDb } = require("./db/init");
 const { healthRouter } = require("./routes/health");
 const { authRouter } = require("./routes/auth");
+const { callsRouter } = require("./routes/calls");
+const { messagesRouter } = require("./routes/messages");
+const { pushRouter } = require("./routes/push");
 const { uploadsRouter, uploadDir } = require("./routes/uploads");
 const { registerSockets } = require("./sockets");
 
@@ -29,6 +32,9 @@ app.get("/api/rtc-config", (req, res) => {
 });
 app.use(healthRouter);
 app.use(authRouter);
+app.use(callsRouter);
+app.use(messagesRouter);
+app.use(pushRouter);
 app.use(uploadsRouter);
 registerSockets(io);
 

@@ -12,7 +12,12 @@ export function connectSocket(token: string) {
 
   socket?.disconnect();
   currentToken = token;
-  socket = io(BACKEND_URL, { transports: ["websocket"], auth: { token } });
+  socket = io(BACKEND_URL, {
+    auth: { token },
+    reconnection: true,
+    reconnectionAttempts: Infinity,
+    timeout: 20000
+  });
   return socket;
 }
 

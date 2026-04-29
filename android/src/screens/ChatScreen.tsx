@@ -1,17 +1,26 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import { Audio } from "expo-av";
+import axios from "axios";
 import { FlatList, StyleSheet, Text, TextInput, View } from "react-native";
 import { Button } from "../components/Button";
 import { ChatMessage, MessageBubble } from "../components/MessageBubble";
+import { BACKEND_URL } from "../config/backend";
 import { SOCKET_EVENTS } from "../config/socketEvents";
 import { getStrings } from "../i18n";
 import { clearSession, Session } from "../services/auth";
 import { startRecording, stopRecording, uploadAudio } from "../services/audio";
+import { registerForPushNotifications } from "../services/notifications";
 import { connectSocket, disconnectSocket, getSocket } from "../services/socket";
 import { theme } from "../theme/theme";
 import { createCallId } from "../utils/call";
 
 type Props = { session: Session; onLogout: () => void; onOpenCall: (callId: string) => void; onIncomingCall: (callId: string) => void };
+
+function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]) {
+  const byId = new Map<string, ChatMessage>();
+  [...current, ...incoming].forEach((message) => byId.set(message.id, message));
+  return Array.from(byId.values()).sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
+}
 
 export function ChatScreen({ session, onLogout, onOpenCall, onIncomingCall }: Props) {
   const labels = getStrings(session.user.lang);
@@ -26,9 +35,28 @@ export function ChatScreen({ session, onLogout, onOpenCall, onIncomingCall }: Pr
   const messageLabels = useMemo(() => ({ original: labels.original, translation: labels.translation, voiceText: labels.voiceText, play: labels.play, read: labels.read, delete: labels.delete }), [labels]);
 
   useEffect(() => {
+    let active = true;
     const socket = connectSocket(session.token);
+    registerForPushNotifications(session.token);
+    axios.get(`${BACKEND_URL}/api/messages`, {
+      headers: { Authorization: `Bearer ${session.token}` }
+    }).then((response) => {
+      const nextMessages = (response.data?.messages || []) as ChatMessage[];
+      if (!active) return;
+      setMessages((current) => mergeMessages(current, nextMessages));
+      nextMessages
+        .filter((message) => message.sender_username !== session.user.username && !message.read_by.includes(session.user.username))
+        .forEach((message) => socket.emit(SOCKET_EVENTS.MESSAGE_READ, { messageId: message.id }));
+    }).catch(() => setNotice("MESAJ_GECMISI_YUKLENEMEDI"));
+    axios.get(`${BACKEND_URL}/api/calls/pending`, {
+      headers: { Authorization: `Bearer ${session.token}` }
+    }).then((response) => {
+      const pendingCall = response.data?.calls?.[0];
+      if (active && pendingCall?.call_id) onIncomingCall(pendingCall.call_id);
+    }).catch(() => undefined);
+
     const onMessageNew = (message: ChatMessage) => {
-      setMessages((current) => [...current, message]);
+      setMessages((current) => mergeMessages(current, [message]));
       if (message.sender_username !== session.user.username) socket.emit(SOCKET_EVENTS.MESSAGE_READ, { messageId: message.id });
     };
     const onReadReceipt = ({ messageId, readBy }: { messageId: string; readBy: string }) => {
@@ -41,10 +69,14 @@ export function ChatScreen({ session, onLogout, onOpenCall, onIncomingCall }: Pr
     const onTypingStart = ({ username }: { username: string }) => setTypingUser(username);
     const onTypingStop = () => setTypingUser("");
     const onIncoming = ({ callId }: { callId: string }) => onIncomingCall(callId);
+    const onConnect = () => setNotice("");
+    const onConnectError = () => setNotice("BAGLANTI_KONTROL_EDILIYOR");
     const onError = ({ error, recoverable }: { error: string; recoverable?: boolean }) => {
       if (recoverable) setNotice(error);
     };
 
+    socket.on("connect", onConnect);
+    socket.on(SOCKET_EVENTS.CONNECT_ERROR, onConnectError);
     socket.on(SOCKET_EVENTS.MESSAGE_NEW, onMessageNew);
     socket.on(SOCKET_EVENTS.MESSAGE_READ_RECEIPT, onReadReceipt);
     socket.on(SOCKET_EVENTS.MESSAGE_DELETED, onMessageDeleted);
@@ -55,6 +87,9 @@ export function ChatScreen({ session, onLogout, onOpenCall, onIncomingCall }: Pr
     socket.on(SOCKET_EVENTS.ERROR, onError);
 
     return () => {
+      active = false;
+      socket.off("connect", onConnect);
+      socket.off(SOCKET_EVENTS.CONNECT_ERROR, onConnectError);
       socket.off(SOCKET_EVENTS.MESSAGE_NEW, onMessageNew);
       socket.off(SOCKET_EVENTS.MESSAGE_READ_RECEIPT, onReadReceipt);
       socket.off(SOCKET_EVENTS.MESSAGE_DELETED, onMessageDeleted);
@@ -69,10 +104,16 @@ export function ChatScreen({ session, onLogout, onOpenCall, onIncomingCall }: Pr
   function sendText() {
     const trimmed = text.trim();
     if (!trimmed) return;
-    getSocket()?.emit(SOCKET_EVENTS.MESSAGE_SEND, { text: trimmed, messageType: "text" }, (ack: { ok: boolean; error?: string }) => {
+    const socket = getSocket();
+    if (!socket) {
+      setNotice("BAGLANTI_YOK");
+      return;
+    }
+    socket.emit(SOCKET_EVENTS.MESSAGE_SEND, { text: trimmed, messageType: "text" }, (ack: { ok: boolean; error?: string }) => {
       if (!ack.ok) setNotice(ack.error || "MESSAGE_SEND_FAILED");
+      else setNotice("");
     });
-    getSocket()?.emit(SOCKET_EVENTS.TYPING_STOP);
+    socket.emit(SOCKET_EVENTS.TYPING_STOP);
     setText("");
   }
 
@@ -138,7 +179,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.background },
   header: { padding: theme.spacing.md, borderBottomWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface, flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: theme.spacing.sm },
   headerIdentity: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm, flex: 1 },
-  avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: theme.colors.primary, alignItems: "center", justifyContent: "center" },
+  avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: theme.colors.heart, alignItems: "center", justifyContent: "center" },
   avatarText: { color: theme.colors.primaryText, fontSize: 23, fontWeight: "900" },
   title: { color: theme.colors.text, fontSize: 19, fontWeight: "800" },
   status: { color: theme.colors.muted, fontSize: 12 },

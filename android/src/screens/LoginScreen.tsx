@@ -44,7 +44,7 @@ export function LoginScreen({ onLogin }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: "center", padding: theme.spacing.lg, gap: theme.spacing.md, backgroundColor: theme.colors.background },
-  logo: { width: 82, height: 82, borderRadius: 41, backgroundColor: theme.colors.primary, alignItems: "center", justifyContent: "center", alignSelf: "center", marginBottom: theme.spacing.sm },
+  logo: { width: 86, height: 86, borderRadius: 43, backgroundColor: theme.colors.heart, alignItems: "center", justifyContent: "center", alignSelf: "center", marginBottom: theme.spacing.sm, borderWidth: 3, borderColor: "#FF8A80" },
   logoHeart: { color: theme.colors.primaryText, fontSize: 44, fontWeight: "900", lineHeight: 50 },
   title: { color: theme.colors.text, fontSize: 30, fontWeight: "800", marginBottom: theme.spacing.lg, textAlign: "center" },
   switcher: { flexDirection: "row", gap: theme.spacing.sm },

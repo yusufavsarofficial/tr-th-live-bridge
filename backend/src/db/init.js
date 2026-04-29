@@ -18,6 +18,25 @@ async function initDb() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS call_events (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      room_code TEXT NOT NULL,
+      call_id TEXT NOT NULL UNIQUE,
+      caller_username TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'ringing',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      answered_at TIMESTAMPTZ,
+      ended_at TIMESTAMPTZ
+    );
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS push_tokens (
+      username TEXT PRIMARY KEY,
+      token TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
 }
 
 module.exports = { initDb };

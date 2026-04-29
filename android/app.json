@@ -4,6 +4,7 @@
     "slug": "sevgilim-chat",
     "version": "1.0.1",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "scheme": "sevgilimchat",
     "assetBundlePatterns": [
@@ -12,6 +13,10 @@
     "android": {
       "package": "com.sevgilimchat.android",
       "versionCode": 2,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0B141A"
+      },
       "permissions": [
         "CAMERA",
         "RECORD_AUDIO",
@@ -39,6 +44,14 @@
         "expo-av",
         {
           "microphonePermission": "Sesli mesaj kaydetmek icin mikrofon izni gerekir."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/adaptive-icon.png",
+          "color": "#E53935",
+          "defaultChannel": "default"
         }
       ]
     ],
