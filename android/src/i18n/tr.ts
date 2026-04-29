@@ -24,6 +24,10 @@
   accept: "Kabul et",
   reject: "Reddet",
   end: "Kapat",
+  delete: "Sil",
+  translateVoice: "Ceviri",
+  stopTranslateVoice: "Ceviri durdur",
+  callVoiceTranslation: "Neeja ses cevirisi",
   original: "Orijinal",
   translation: "Ceviri"
 };

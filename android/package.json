@@ -1,35 +1,36 @@
 {
-    "name":  "sevgilim-chat-android",
-    "version":  "1.0.0",
-    "private":  true,
-    "main":  "expo/AppEntry",
-    "scripts":  {
-                    "start":  "expo start",
-                    "prebuild":  "expo prebuild",
-                    "android":  "expo run:android",
-                    "check":  "tsc --noEmit"
-                },
-    "dependencies":  {
-                         "@config-plugins/react-native-webrtc":  "^10.0.0",
-                         "axios":  "^1.7.9",
-                         "expo":  "~52.0.25",
-                         "expo-av":  "~15.0.2",
-                         "expo-camera":  "~16.0.10",
-                         "expo-secure-store":  "~14.0.1",
-                         "expo-status-bar":  "~2.0.1",
-                         "expo-system-ui":  "~4.0.9",
-                         "react":  "18.3.1",
-                         "react-native":  "0.76.9",
-                         "react-native-webrtc":  "^124.0.4",
-                         "socket.io-client":  "^4.8.1"
-                     },
-    "devDependencies":  {
-                            "@types/react":  "~18.3.12",
-                            "typescript":  "^5.3.3"
-                        },
-    "overrides":  {
-                      "@xmldom/xmldom":  "^0.9.10",
-                      "postcss":  "^8.5.12",
-                      "uuid":  "^14.0.0"
-                  }
+  "name": "sevgilim-chat-android",
+  "version": "1.0.0",
+  "private": true,
+  "main": "expo/AppEntry",
+  "scripts": {
+    "start": "expo start",
+    "prebuild": "expo prebuild",
+    "android": "expo run:android",
+    "check": "tsc --noEmit",
+    "ios": "expo run:ios"
+  },
+  "dependencies": {
+    "@config-plugins/react-native-webrtc": "^10.0.0",
+    "axios": "^1.7.9",
+    "expo": "~52.0.25",
+    "expo-av": "~15.0.2",
+    "expo-camera": "~16.0.10",
+    "expo-secure-store": "~14.0.1",
+    "expo-status-bar": "~2.0.1",
+    "expo-system-ui": "~4.0.9",
+    "react": "18.3.1",
+    "react-native": "0.76.9",
+    "react-native-webrtc": "^124.0.4",
+    "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "@types/react": "~18.3.12",
+    "typescript": "^5.3.3"
+  },
+  "overrides": {
+    "@xmldom/xmldom": "^0.9.10",
+    "postcss": "^8.5.12",
+    "uuid": "^14.0.0"
+  }
 }

@@ -5,6 +5,8 @@
   MESSAGE_NEW: "message:new",
   MESSAGE_READ: "message:read",
   MESSAGE_READ_RECEIPT: "message:read-receipt",
+  MESSAGE_DELETE: "message:delete",
+  MESSAGE_DELETED: "message:deleted",
   TYPING_START: "typing:start",
   TYPING_STOP: "typing:stop",
   PRESENCE_UPDATE: "presence:update",
@@ -19,5 +21,6 @@
   WEBRTC_OFFER: "webrtc:offer",
   WEBRTC_ANSWER: "webrtc:answer",
   WEBRTC_ICE_CANDIDATE: "webrtc:ice-candidate",
+  CALL_VOICE_TRANSLATION: "call:voice-translation",
   ERROR: "error"
 } as const;

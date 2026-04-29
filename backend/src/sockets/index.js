@@ -5,6 +5,7 @@ const { SOCKET_EVENTS } = require("./events");
 
 const onlineUsers = new Map();
 const MAX_TEXT_LENGTH = 4000;
+const MAX_CALL_ID_LENGTH = 120;
 
 function emitPresence(io) {
   io.emit(SOCKET_EVENTS.PRESENCE_UPDATE, { online: Array.from(onlineUsers.keys()) });
@@ -33,6 +34,10 @@ function registerSockets(io) {
       try {
         const messageType = payload.messageType === "audio" ? "audio" : "text";
         const originalText = String(payload.text || "").slice(0, MAX_TEXT_LENGTH);
+        if (messageType === "text" && !originalText.trim()) {
+          if (callback) callback({ ok: false, error: "EMPTY_MESSAGE" });
+          return;
+        }
         const targetLang = user.lang === "tr" ? "th" : "tr";
         let translatedText = String(payload.translatedText || "").slice(0, MAX_TEXT_LENGTH);
 
@@ -71,14 +76,45 @@ function registerSockets(io) {
       await pool.query("UPDATE messages SET read_by = array_append(read_by, $1) WHERE id = $2 AND NOT ($1 = ANY(read_by))", [user.username, messageId]);
       socket.to("private-room").emit(SOCKET_EVENTS.MESSAGE_READ_RECEIPT, { messageId, readBy: user.username });
     });
+    socket.on(SOCKET_EVENTS.MESSAGE_DELETE, async ({ messageId } = {}, callback) => {
+      try {
+        if (user.username !== "Yusuf") {
+          if (callback) callback({ ok: false, error: "DELETE_NOT_ALLOWED" });
+          return;
+        }
+        const result = await pool.query("DELETE FROM messages WHERE id = $1 RETURNING id", [messageId]);
+        if (!result.rowCount) {
+          if (callback) callback({ ok: false, error: "MESSAGE_NOT_FOUND" });
+          return;
+        }
+        io.to("private-room").emit(SOCKET_EVENTS.MESSAGE_DELETED, { messageId });
+        if (callback) callback({ ok: true });
+      } catch (error) {
+        if (callback) callback({ ok: false, error: error.code || "MESSAGE_DELETE_FAILED" });
+      }
+    });
 
-    socket.on(SOCKET_EVENTS.CALL_START, (payload) => socket.to("private-room").emit(SOCKET_EVENTS.CALL_INCOMING, { from: user.username, callId: payload.callId }));
-    socket.on(SOCKET_EVENTS.CALL_ACCEPT, (payload) => socket.to("private-room").emit(SOCKET_EVENTS.CALL_ACCEPTED, { from: user.username, callId: payload.callId }));
-    socket.on(SOCKET_EVENTS.CALL_REJECT, (payload) => socket.to("private-room").emit(SOCKET_EVENTS.CALL_REJECTED, { from: user.username, callId: payload.callId }));
-    socket.on(SOCKET_EVENTS.CALL_END, (payload) => socket.to("private-room").emit(SOCKET_EVENTS.CALL_ENDED, { from: user.username, callId: payload.callId }));
-    socket.on(SOCKET_EVENTS.WEBRTC_OFFER, (payload) => socket.to("private-room").emit(SOCKET_EVENTS.WEBRTC_OFFER, { ...payload, from: user.username }));
-    socket.on(SOCKET_EVENTS.WEBRTC_ANSWER, (payload) => socket.to("private-room").emit(SOCKET_EVENTS.WEBRTC_ANSWER, { ...payload, from: user.username }));
-    socket.on(SOCKET_EVENTS.WEBRTC_ICE_CANDIDATE, (payload) => socket.to("private-room").emit(SOCKET_EVENTS.WEBRTC_ICE_CANDIDATE, { ...payload, from: user.username }));
+    const validCallId = (payload = {}) => typeof payload.callId === "string" && payload.callId.length > 0 && payload.callId.length <= MAX_CALL_ID_LENGTH;
+    const forwardCall = (event, outgoingEvent) => (payload = {}) => {
+      if (!validCallId(payload)) return socket.emit(SOCKET_EVENTS.ERROR, { error: "INVALID_CALL_ID", recoverable: true });
+      socket.to("private-room").emit(outgoingEvent, { ...payload, from: user.username });
+    };
+    socket.on(SOCKET_EVENTS.CALL_START, forwardCall(SOCKET_EVENTS.CALL_START, SOCKET_EVENTS.CALL_INCOMING));
+    socket.on(SOCKET_EVENTS.CALL_ACCEPT, forwardCall(SOCKET_EVENTS.CALL_ACCEPT, SOCKET_EVENTS.CALL_ACCEPTED));
+    socket.on(SOCKET_EVENTS.CALL_REJECT, forwardCall(SOCKET_EVENTS.CALL_REJECT, SOCKET_EVENTS.CALL_REJECTED));
+    socket.on(SOCKET_EVENTS.CALL_END, forwardCall(SOCKET_EVENTS.CALL_END, SOCKET_EVENTS.CALL_ENDED));
+    socket.on(SOCKET_EVENTS.WEBRTC_OFFER, forwardCall(SOCKET_EVENTS.WEBRTC_OFFER, SOCKET_EVENTS.WEBRTC_OFFER));
+    socket.on(SOCKET_EVENTS.WEBRTC_ANSWER, forwardCall(SOCKET_EVENTS.WEBRTC_ANSWER, SOCKET_EVENTS.WEBRTC_ANSWER));
+    socket.on(SOCKET_EVENTS.WEBRTC_ICE_CANDIDATE, forwardCall(SOCKET_EVENTS.WEBRTC_ICE_CANDIDATE, SOCKET_EVENTS.WEBRTC_ICE_CANDIDATE));
+    socket.on(SOCKET_EVENTS.CALL_VOICE_TRANSLATION, (payload = {}) => {
+      if (user.username !== "Neeja" || !validCallId(payload)) return;
+      socket.to("private-room").emit(SOCKET_EVENTS.CALL_VOICE_TRANSLATION, {
+        callId: payload.callId,
+        from: user.username,
+        originalText: String(payload.originalText || "").slice(0, MAX_TEXT_LENGTH),
+        translatedText: String(payload.translatedText || "").slice(0, MAX_TEXT_LENGTH)
+      });
+    });
 
     socket.on("disconnect", () => {
       if (onlineUsers.get(user.username) === socket.id) onlineUsers.delete(user.username);

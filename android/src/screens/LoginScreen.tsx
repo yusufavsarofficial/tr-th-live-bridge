@@ -25,6 +25,9 @@ export function LoginScreen({ onLogin }: Props) {
 
   return (
     <View style={styles.container}>
+      <View style={styles.logo}>
+        <Text style={styles.logoHeart}>♥</Text>
+      </View>
       <Text style={styles.title}>{labels.appName}</Text>
       <View style={styles.switcher}>
         <Button label="Yusuf" onPress={() => setUsername("Yusuf")} variant={username === "Yusuf" ? "primary" : "ghost"} />
@@ -40,8 +43,10 @@ export function LoginScreen({ onLogin }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", padding: theme.spacing.lg, gap: theme.spacing.md },
-  title: { color: theme.colors.text, fontSize: 30, fontWeight: "800", marginBottom: theme.spacing.lg },
+  container: { flex: 1, justifyContent: "center", padding: theme.spacing.lg, gap: theme.spacing.md, backgroundColor: theme.colors.background },
+  logo: { width: 82, height: 82, borderRadius: 41, backgroundColor: theme.colors.primary, alignItems: "center", justifyContent: "center", alignSelf: "center", marginBottom: theme.spacing.sm },
+  logoHeart: { color: theme.colors.primaryText, fontSize: 44, fontWeight: "900", lineHeight: 50 },
+  title: { color: theme.colors.text, fontSize: 30, fontWeight: "800", marginBottom: theme.spacing.lg, textAlign: "center" },
   switcher: { flexDirection: "row", gap: theme.spacing.sm },
   input: { minHeight: 48, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface, color: theme.colors.text, paddingHorizontal: theme.spacing.md },
   error: { color: theme.colors.danger }

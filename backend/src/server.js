@@ -19,7 +19,14 @@ app.use(helmet());
 app.use(cors({ origin: env.corsOrigin }));
 app.use(express.json({ limit: "1mb" }));
 app.use(rateLimit({ windowMs: 60 * 1000, max: 120 }));
-app.use("/uploads", express.static(uploadDir));
+app.use("/uploads", express.static(uploadDir, { dotfiles: "deny", immutable: true, maxAge: "1h" }));
+app.get("/api/rtc-config", (req, res) => {
+  const iceServers = [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:global.stun.twilio.com:3478" }];
+  if (env.turn.url && env.turn.username && env.turn.password) {
+    iceServers.push({ urls: env.turn.url, username: env.turn.username, credential: env.turn.password });
+  }
+  res.json({ iceServers });
+});
 app.use(healthRouter);
 app.use(authRouter);
 app.use(uploadsRouter);

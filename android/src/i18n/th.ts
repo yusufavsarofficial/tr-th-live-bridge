@@ -24,6 +24,10 @@
   accept: "รับสาย",
   reject: "ปฏิเสธ",
   end: "วางสาย",
+  delete: "ลบ",
+  translateVoice: "แปลเสียง",
+  stopTranslateVoice: "หยุดแปลเสียง",
+  callVoiceTranslation: "แปลเสียง Neeja",
   original: "ต้นฉบับ",
   translation: "แปล"
 };

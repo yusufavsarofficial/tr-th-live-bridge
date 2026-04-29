@@ -13,7 +13,7 @@ export function Button({ label, onPress, variant = "primary" }: Props) {
 }
 
 const styles = StyleSheet.create({
-  button: { minHeight: 44, paddingHorizontal: theme.spacing.md, borderRadius: theme.radius.md, backgroundColor: theme.colors.primary, alignItems: "center", justifyContent: "center" },
+  button: { minHeight: 42, paddingHorizontal: theme.spacing.md, borderRadius: 999, backgroundColor: theme.colors.primary, alignItems: "center", justifyContent: "center" },
   danger: { backgroundColor: theme.colors.danger },
   ghost: { backgroundColor: theme.colors.surfaceSoft, borderWidth: 1, borderColor: theme.colors.border },
   pressed: { opacity: 0.78 },

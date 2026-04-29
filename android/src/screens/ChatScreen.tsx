@@ -23,7 +23,7 @@ export function ChatScreen({ session, onLogout, onOpenCall, onIncomingCall }: Pr
   const [notice, setNotice] = useState("");
   const partner = session.user.username === "Yusuf" ? "Neeja" : "Yusuf";
   const partnerOnline = online.includes(partner);
-  const messageLabels = useMemo(() => ({ original: labels.original, translation: labels.translation, voiceText: labels.voiceText, play: labels.play, read: labels.read }), [labels]);
+  const messageLabels = useMemo(() => ({ original: labels.original, translation: labels.translation, voiceText: labels.voiceText, play: labels.play, read: labels.read, delete: labels.delete }), [labels]);
 
   useEffect(() => {
     const socket = connectSocket(session.token);
@@ -33,6 +33,9 @@ export function ChatScreen({ session, onLogout, onOpenCall, onIncomingCall }: Pr
     };
     const onReadReceipt = ({ messageId, readBy }: { messageId: string; readBy: string }) => {
       setMessages((current) => current.map((item) => item.id === messageId && !item.read_by.includes(readBy) ? { ...item, read_by: [...item.read_by, readBy] } : item));
+    };
+    const onMessageDeleted = ({ messageId }: { messageId: string }) => {
+      setMessages((current) => current.filter((item) => item.id !== messageId));
     };
     const onPresence = ({ online: nextOnline }: { online: string[] }) => setOnline(nextOnline);
     const onTypingStart = ({ username }: { username: string }) => setTypingUser(username);
@@ -44,6 +47,7 @@ export function ChatScreen({ session, onLogout, onOpenCall, onIncomingCall }: Pr
 
     socket.on(SOCKET_EVENTS.MESSAGE_NEW, onMessageNew);
     socket.on(SOCKET_EVENTS.MESSAGE_READ_RECEIPT, onReadReceipt);
+    socket.on(SOCKET_EVENTS.MESSAGE_DELETED, onMessageDeleted);
     socket.on(SOCKET_EVENTS.PRESENCE_UPDATE, onPresence);
     socket.on(SOCKET_EVENTS.TYPING_START, onTypingStart);
     socket.on(SOCKET_EVENTS.TYPING_STOP, onTypingStop);
@@ -53,6 +57,7 @@ export function ChatScreen({ session, onLogout, onOpenCall, onIncomingCall }: Pr
     return () => {
       socket.off(SOCKET_EVENTS.MESSAGE_NEW, onMessageNew);
       socket.off(SOCKET_EVENTS.MESSAGE_READ_RECEIPT, onReadReceipt);
+      socket.off(SOCKET_EVENTS.MESSAGE_DELETED, onMessageDeleted);
       socket.off(SOCKET_EVENTS.PRESENCE_UPDATE, onPresence);
       socket.off(SOCKET_EVENTS.TYPING_START, onTypingStart);
       socket.off(SOCKET_EVENTS.TYPING_STOP, onTypingStop);
@@ -96,19 +101,28 @@ export function ChatScreen({ session, onLogout, onOpenCall, onIncomingCall }: Pr
     onOpenCall(callId);
   }
 
+  function deleteMessage(messageId: string) {
+    getSocket()?.emit(SOCKET_EVENTS.MESSAGE_DELETE, { messageId }, (ack: { ok: boolean; error?: string }) => {
+      if (!ack.ok) setNotice(ack.error || "MESSAGE_DELETE_FAILED");
+    });
+  }
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <View>
+        <View style={styles.headerIdentity}>
+          <View style={styles.avatar}><Text style={styles.avatarText}>♥</Text></View>
+          <View>
           <Text style={styles.title}>{partner}</Text>
           <Text style={styles.status}>{partnerOnline ? labels.online : labels.offline}</Text>
+          </View>
         </View>
         <View style={styles.headerActions}>
           <Button label={labels.call} onPress={startCall} />
           <Button label={labels.logout} onPress={async () => { await clearSession(); disconnectSocket(); onLogout(); }} variant="ghost" />
         </View>
       </View>
-      <FlatList style={styles.list} data={messages} keyExtractor={(item) => item.id} renderItem={({ item }) => <MessageBubble message={item} mine={item.sender_username === session.user.username} read={item.read_by.includes(partner)} labels={messageLabels} />} />
+      <FlatList style={styles.list} data={messages} keyExtractor={(item) => item.id} renderItem={({ item }) => <MessageBubble message={item} mine={item.sender_username === session.user.username} read={item.read_by.includes(partner)} canDelete={session.user.username === "Yusuf"} onDelete={deleteMessage} labels={messageLabels} />} />
       {notice ? <Text style={styles.notice}>{notice}</Text> : null}
       {typingUser ? <Text style={styles.typing}>{labels.typing}</Text> : null}
       <View style={styles.composer}>
@@ -122,13 +136,16 @@ export function ChatScreen({ session, onLogout, onOpenCall, onIncomingCall }: Pr
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.background },
-  header: { padding: theme.spacing.md, borderBottomWidth: 1, borderColor: theme.colors.border, flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: theme.spacing.sm },
-  title: { color: theme.colors.text, fontSize: 20, fontWeight: "800" },
-  status: { color: theme.colors.muted },
+  header: { padding: theme.spacing.md, borderBottomWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface, flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: theme.spacing.sm },
+  headerIdentity: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm, flex: 1 },
+  avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: theme.colors.primary, alignItems: "center", justifyContent: "center" },
+  avatarText: { color: theme.colors.primaryText, fontSize: 23, fontWeight: "900" },
+  title: { color: theme.colors.text, fontSize: 19, fontWeight: "800" },
+  status: { color: theme.colors.muted, fontSize: 12 },
   headerActions: { flexDirection: "row", gap: theme.spacing.sm },
-  list: { flex: 1, padding: theme.spacing.md },
+  list: { flex: 1, padding: theme.spacing.md, backgroundColor: theme.colors.background },
   typing: { color: theme.colors.muted, paddingHorizontal: theme.spacing.md },
   notice: { color: theme.colors.muted, paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.xs },
-  composer: { padding: theme.spacing.md, gap: theme.spacing.sm, borderTopWidth: 1, borderColor: theme.colors.border },
-  messageInput: { minHeight: 46, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface, color: theme.colors.text, paddingHorizontal: theme.spacing.md }
+  composer: { padding: theme.spacing.md, gap: theme.spacing.sm, borderTopWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
+  messageInput: { minHeight: 46, borderRadius: 999, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surfaceSoft, color: theme.colors.text, paddingHorizontal: theme.spacing.md }
 });

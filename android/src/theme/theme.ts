@@ -1,17 +1,17 @@
 ﻿export const theme = {
   colors: {
-    background: "#101214",
-    surface: "#181C20",
-    surfaceSoft: "#20262B",
-    text: "#F4F7F8",
-    muted: "#9AA6AD",
-    border: "#303940",
-    primary: "#5DD6B3",
-    primaryText: "#071411",
+    background: "#0B141A",
+    surface: "#111B21",
+    surfaceSoft: "#202C33",
+    text: "#E9EDEF",
+    muted: "#8696A0",
+    border: "#24333C",
+    primary: "#00A884",
+    primaryText: "#FFFFFF",
     danger: "#FF6B6B",
-    bubbleMine: "#234B43",
-    bubbleOther: "#20262B"
+    bubbleMine: "#005C4B",
+    bubbleOther: "#202C33"
   },
-  radius: { sm: 6, md: 8 },
+  radius: { sm: 10, md: 18 },
   spacing: { xs: 6, sm: 10, md: 14, lg: 20 }
 };

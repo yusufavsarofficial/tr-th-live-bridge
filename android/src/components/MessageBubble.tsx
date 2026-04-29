@@ -18,10 +18,12 @@ type Props = {
   message: ChatMessage;
   mine: boolean;
   read: boolean;
-  labels: { original: string; translation: string; voiceText: string; play: string; read: string };
+  canDelete: boolean;
+  onDelete: (messageId: string) => void;
+  labels: { original: string; translation: string; voiceText: string; play: string; read: string; delete: string };
 };
 
-export function MessageBubble({ message, mine, read, labels }: Props) {
+export function MessageBubble({ message, mine, read, canDelete, onDelete, labels }: Props) {
   return (
     <View style={[styles.wrap, mine ? styles.mineWrap : styles.otherWrap]}>
       <View style={[styles.bubble, mine ? styles.mine : styles.other]}>
@@ -51,16 +53,17 @@ export function MessageBubble({ message, mine, read, labels }: Props) {
           </>
         )}
         {mine && read ? <Text style={styles.read}>{labels.read}</Text> : null}
+        {canDelete ? <Button label={labels.delete} onPress={() => onDelete(message.id)} variant="danger" /> : null}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { marginVertical: theme.spacing.xs },
+  wrap: { marginVertical: 3 },
   mineWrap: { alignItems: "flex-end" },
   otherWrap: { alignItems: "flex-start" },
-  bubble: { maxWidth: "86%", borderRadius: theme.radius.md, padding: theme.spacing.md, borderWidth: 1, borderColor: theme.colors.border },
+  bubble: { maxWidth: "86%", borderRadius: 18, paddingVertical: theme.spacing.sm, paddingHorizontal: theme.spacing.md, borderWidth: 1, borderColor: theme.colors.border },
   mine: { backgroundColor: theme.colors.bubbleMine },
   other: { backgroundColor: theme.colors.bubbleOther },
   sender: { color: theme.colors.primary, fontWeight: "700", marginBottom: 4 },
