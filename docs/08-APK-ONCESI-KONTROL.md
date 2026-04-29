@@ -6,7 +6,7 @@
 - [ ] `DATABASE_URL` dogru mu?
 - [ ] Yusuf/Neeja giris bilgileri backend environment olarak girildi mi?
 - [ ] `android/src/config/backend.ts` icindeki `BACKEND_URL` canli backend adresiyle degistirildi mi?
-- [ ] APK icinde localhost, lokal IP veya secret kalmadi mi?
+- [ ] APK icinde yerel gelistirme adresi, lokal IP veya secret kalmadi mi?
 - [ ] `.env`, `LOCAL-GIRIS-BILGILERI.txt`, APK/AAB, log ve build ciktisi GitHub disinda mi?
 - [ ] `npm run check` Android klasorunde basarili mi?
 - [ ] Backend `npm run check` basarili mi?

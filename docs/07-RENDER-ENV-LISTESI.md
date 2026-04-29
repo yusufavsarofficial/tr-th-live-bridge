@@ -23,6 +23,7 @@ USER_B_LANG=th
 TRANSLATION_PROVIDER=openai
 OPENAI_API_KEY=OpenAI API key
 PUBLIC_BASE_URL=Canli backend URL
+APK_DOWNLOAD_URL=Opsiyonel guncel APK indirme URL'si
 CORS_ORIGIN=*
 TURN_URL=Gerekirse TURN server URL
 TURN_USERNAME=Gerekirse TURN kullanici adi

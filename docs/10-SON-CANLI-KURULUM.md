@@ -17,7 +17,7 @@ Neon veya Supabase uzerinde PostgreSQL database olustur. Verilen connection stri
 Neon/Supabase baglanti adresi su mantiktadir:
 
 ```text
-DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DB?sslmode=require
+DATABASE_URL=<postgres-connection-url>
 ```
 
 Gercek degeri dokumana veya Android icine yazma.

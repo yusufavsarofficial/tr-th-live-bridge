@@ -62,6 +62,7 @@ USER_B_LANG
 TRANSLATION_PROVIDER
 OPENAI_API_KEY
 PUBLIC_BASE_URL
+APK_DOWNLOAD_URL
 CORS_ORIGIN
 TURN_URL
 TURN_USERNAME
@@ -90,6 +91,16 @@ eas build -p android --profile production
 ```
 
 APK/AAB, `.env`, log dosyalari, `node_modules`, build ciktisi ve lokal giris bilgileri GitHub'a eklenmez.
+
+GitHub Actions ile manuel APK almak icin Actions sekmesinden `Android Release APK` workflow'u calistirilir. Artifact adi `SevgilimChat-release.apk` olarak yuklenir.
+
+Render uzerinden APK indirme endpoint'i:
+
+```text
+https://sevgilim-chat.onrender.com/download/apk
+```
+
+Bu endpoint APK dosyasini repoya koymadan, backend environment icindeki `APK_DOWNLOAD_URL` degerinden guvenli sekilde stream eder. Render dosya sistemi kalici APK depolama icin kullanilmaz; guncel APK linki EAS veya GitHub release/artifact tarafindan saglanip `APK_DOWNLOAD_URL` olarak verilmelidir.
 
 ## Mesajlasma ve Ceviri
 

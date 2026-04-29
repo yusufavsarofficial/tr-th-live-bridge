@@ -42,6 +42,7 @@ const env = {
   privateRoomCode: required("PRIVATE_ROOM_CODE"),
   corsOrigin: process.env.CORS_ORIGIN || "*",
   publicBaseUrl: process.env.PUBLIC_BASE_URL || "",
+  apkDownloadUrl: process.env.APK_DOWNLOAD_URL || "",
   translationProvider: process.env.TRANSLATION_PROVIDER || "openai",
   openaiApiKey: process.env.OPENAI_API_KEY || "",
   turn: {

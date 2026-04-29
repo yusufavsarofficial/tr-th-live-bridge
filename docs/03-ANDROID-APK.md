@@ -45,7 +45,7 @@ Production AAB icin:
 eas build -p android --profile production
 ```
 
-APK build oncesi `android/src/config/backend.ts` icinde production URL `https://sevgilim-chat.onrender.com` kalmalidir. APK icinde localhost, lokal IP, secret, `.env`, APK/AAB veya build ciktisi repoya eklenmemelidir.
+APK build oncesi `android/src/config/backend.ts` icinde production URL `https://sevgilim-chat.onrender.com` kalmalidir. APK icinde yerel gelistirme adresi, lokal IP, secret, `.env`, APK/AAB veya build ciktisi repoya eklenmemelidir.
 
 Gerekli Android izinleri sade tutulur: internet, kamera, mikrofon, konum ve konum arka plan servisi.
 

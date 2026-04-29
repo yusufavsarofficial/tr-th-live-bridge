@@ -32,6 +32,7 @@ Zorunlu alanlar: `PORT`, `DATABASE_URL`, `JWT_SECRET`, `MESSAGE_ENCRYPTION_KEY`,
 - `GET /api/location/latest`
 - `POST /api/location`
 - `POST /api/uploads/audio`
+- `GET /download/apk`
 
 ## Guvenlik
 
@@ -59,3 +60,5 @@ Instance Type: Free
 `backend/Dockerfile` Node.js LTS image kullanir, `/app` dizininde calisir, `npm ci --omit=dev` ile production bagimliliklarini kurar ve `npm run start` ile server baslatir.
 
 `.env` dosyasi image icine kopyalanmaz. Tum secret degerler Render Environment panelinden girilir.
+
+APK indirme endpoint'i `APK_DOWNLOAD_URL` environment degeri verilirse `/download/apk` uzerinden APK dosyasini stream eder. APK dosyasi repoya veya Docker image icine eklenmez.

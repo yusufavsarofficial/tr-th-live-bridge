@@ -67,7 +67,7 @@ Repo kokundeki `render.yaml` Blueprint olarak kullanilabilir. Secret degerleri y
 Neon veya Supabase PostgreSQL connection string degeri Render Environment alaninda `DATABASE_URL` olarak girilir.
 
 ```text
-DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DB?sslmode=require
+DATABASE_URL=<postgres-connection-url>
 ```
 
 Gercek connection string Android icine veya dokumana yazilmaz.

@@ -1,4 +1,4 @@
-const { withGradleProperties } = require("@expo/config-plugins");
+const { withAppBuildGradle, withGradleProperties } = require("@expo/config-plugins");
 
 const releaseProperties = {
   "android.enableProguardInReleaseBuilds": "true",
@@ -17,10 +17,21 @@ function upsertProperty(properties, key, value) {
 }
 
 module.exports = function withAndroidReleaseHardening(config) {
-  return withGradleProperties(config, (nextConfig) => {
+  const withProperties = withGradleProperties(config, (nextConfig) => {
     Object.entries(releaseProperties).forEach(([key, value]) => {
       upsertProperty(nextConfig.modResults, key, value);
     });
+    return nextConfig;
+  });
+
+  return withAppBuildGradle(withProperties, (nextConfig) => {
+    const contents = nextConfig.modResults.contents;
+    if (!contents.includes("abiFilters 'armeabi-v7a', 'arm64-v8a'")) {
+      nextConfig.modResults.contents = contents.replace(
+        /defaultConfig\s*\{/,
+        "defaultConfig {\n        ndk { abiFilters 'armeabi-v7a', 'arm64-v8a' }"
+      );
+    }
     return nextConfig;
   });
 };

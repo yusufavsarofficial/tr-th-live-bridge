@@ -17,7 +17,6 @@ const { pushRouter } = require("./routes/push");
 const { uploadsRouter, uploadDir } = require("./routes/uploads");
 const { registerSockets } = require("./sockets");
 
-const apkDownloadUrl = "https://expo.dev/artifacts/eas/x2d23kCJK2ZtDhvTDBhjLG.apk";
 const app = express();
 const server = http.createServer(app);
 const allowedOrigins = env.corsOrigin.split(",").map((origin) => origin.trim()).filter(Boolean);
@@ -48,7 +47,7 @@ function streamApk(res, url) {
       return;
     }
     res.setHeader("Content-Type", "application/vnd.android.package-archive");
-    res.setHeader("Content-Disposition", "attachment; filename=\"sevgilim-chat.apk\"");
+    res.setHeader("Content-Disposition", "attachment; filename=\"SevgilimChat-release.apk\"");
     res.setHeader("Cache-Control", "public, max-age=300");
     if (upstreamRes.headers["content-length"]) res.setHeader("Content-Length", upstreamRes.headers["content-length"]);
     upstreamRes.pipe(res);
@@ -70,10 +69,13 @@ app.use("/uploads", express.static(uploadDir, { dotfiles: "deny", immutable: tru
 app.get("/", (req, res) => res.json({
   ok: true,
   service: "sevgilim-chat-backend",
-  apk: "/apk/sevgilim-chat.apk",
+  apk: "/download/apk",
   health: "/health"
 }));
-app.get("/apk/sevgilim-chat.apk", (req, res) => streamApk(res, apkDownloadUrl));
+app.get(["/download/apk", "/apk/sevgilim-chat.apk"], (req, res) => {
+  if (!env.apkDownloadUrl) return res.status(503).json({ error: "APK_DOWNLOAD_URL_NOT_CONFIGURED" });
+  return streamApk(res, env.apkDownloadUrl);
+});
 app.get("/api/rtc-config", authMiddleware, (req, res) => {
   const iceServers = [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:global.stun.twilio.com:3478" }];
   if (env.turn.url && env.turn.username && env.turn.password) {
