@@ -1,7 +1,7 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Audio } from "expo-av";
 import axios from "axios";
-import { FlatList, StyleSheet, Text, TextInput, View } from "react-native";
+import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from "react-native";
 import { Button } from "../components/Button";
 import { ChatMessage, MessageBubble } from "../components/MessageBubble";
 import { BACKEND_URL } from "../config/backend";
@@ -24,6 +24,7 @@ function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]) {
 
 export function ChatScreen({ session, onLogout, onOpenCall, onIncomingCall }: Props) {
   const labels = getStrings(session.user.lang);
+  const listRef = useRef<FlatList<ChatMessage>>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [text, setText] = useState("");
   const [online, setOnline] = useState<string[]>([]);
@@ -32,7 +33,14 @@ export function ChatScreen({ session, onLogout, onOpenCall, onIncomingCall }: Pr
   const [notice, setNotice] = useState("");
   const partner = session.user.username === "Yusuf" ? "Neeja" : "Yusuf";
   const partnerOnline = online.includes(partner);
-  const messageLabels = useMemo(() => ({ original: labels.original, translation: labels.translation, voiceText: labels.voiceText, play: labels.play, read: labels.read, delete: labels.delete }), [labels]);
+  const messageLabels = useMemo(() => ({
+    original: labels.original,
+    translation: labels.translation,
+    voiceText: labels.voiceText,
+    play: labels.play,
+    read: labels.read,
+    delete: labels.delete
+  }), [labels]);
 
   useEffect(() => {
     let active = true;
@@ -101,6 +109,10 @@ export function ChatScreen({ session, onLogout, onOpenCall, onIncomingCall }: Pr
     };
   }, [onIncomingCall, session.token, session.user.username]);
 
+  useEffect(() => {
+    requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+  }, [messages.length]);
+
   function sendText() {
     const trimmed = text.trim();
     if (!trimmed) return;
@@ -149,44 +161,146 @@ export function ChatScreen({ session, onLogout, onOpenCall, onIncomingCall }: Pr
   }
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={0}
+    >
       <View style={styles.header}>
         <View style={styles.headerIdentity}>
-          <View style={styles.avatar}><Text style={styles.avatarText}>♥</Text></View>
-          <View>
-          <Text style={styles.title}>{partner}</Text>
-          <Text style={styles.status}>{partnerOnline ? labels.online : labels.offline}</Text>
+          <View style={styles.avatar}><Text style={styles.avatarText}>{partner.slice(0, 1)}</Text></View>
+          <View style={styles.headerText}>
+            <Text style={styles.title} numberOfLines={1}>{partner}</Text>
+            <Text style={styles.status} numberOfLines={1}>
+              {typingUser ? labels.typing : partnerOnline ? labels.online : labels.offline}
+            </Text>
           </View>
         </View>
         <View style={styles.headerActions}>
-          <Button label={labels.call} onPress={startCall} />
-          <Button label={labels.logout} onPress={async () => { await clearSession(); disconnectSocket(); onLogout(); }} variant="ghost" />
+          <Button label="☎" onPress={startCall} variant="icon" />
+          <Button label="⋮" onPress={async () => { await clearSession(); disconnectSocket(); onLogout(); }} variant="icon" />
         </View>
       </View>
-      <FlatList style={styles.list} data={messages} keyExtractor={(item) => item.id} renderItem={({ item }) => <MessageBubble message={item} mine={item.sender_username === session.user.username} read={item.read_by.includes(partner)} canDelete={session.user.username === "Yusuf"} onDelete={deleteMessage} labels={messageLabels} />} />
-      {notice ? <Text style={styles.notice}>{notice}</Text> : null}
-      {typingUser ? <Text style={styles.typing}>{labels.typing}</Text> : null}
-      <View style={styles.composer}>
-        <TextInput style={styles.messageInput} value={text} onChangeText={(value) => { setText(value); getSocket()?.emit(value ? SOCKET_EVENTS.TYPING_START : SOCKET_EVENTS.TYPING_STOP); }} placeholder={labels.messagePlaceholder} placeholderTextColor={theme.colors.muted} />
-        <Button label={recording ? labels.stop : labels.record} onPress={toggleRecording} variant="ghost" />
-        <Button label={labels.send} onPress={sendText} />
+
+      <View style={styles.chatArea}>
+        <View style={styles.wallpaperMark} />
+        <View style={[styles.wallpaperMark, styles.wallpaperMarkSmall]} />
+        <FlatList
+          ref={listRef}
+          style={styles.list}
+          contentContainerStyle={styles.listContent}
+          data={messages}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <MessageBubble
+              message={item}
+              mine={item.sender_username === session.user.username}
+              read={item.read_by.includes(partner)}
+              canDelete={session.user.username === "Yusuf"}
+              onDelete={deleteMessage}
+              labels={messageLabels}
+            />
+          )}
+          keyboardShouldPersistTaps="handled"
+          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
+        />
       </View>
-    </View>
+
+      {notice ? <Text style={styles.notice}>{notice}</Text> : null}
+
+      <View style={styles.composerWrap}>
+        <View style={styles.composer}>
+          <Text style={styles.emoji}>☺</Text>
+          <TextInput
+            style={styles.messageInput}
+            value={text}
+            onChangeText={(value) => {
+              setText(value);
+              getSocket()?.emit(value ? SOCKET_EVENTS.TYPING_START : SOCKET_EVENTS.TYPING_STOP);
+            }}
+            placeholder={labels.messagePlaceholder}
+            placeholderTextColor={theme.colors.muted}
+            multiline
+            maxLength={4000}
+          />
+          <Button label={recording ? "■" : "🎙"} onPress={toggleRecording} variant="icon" />
+        </View>
+        <Button label={text.trim() ? "➤" : "☎"} onPress={text.trim() ? sendText : startCall} style={styles.sendButton} />
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.background },
-  header: { padding: theme.spacing.md, borderBottomWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface, flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: theme.spacing.sm },
-  headerIdentity: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm, flex: 1 },
-  avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: theme.colors.heart, alignItems: "center", justifyContent: "center" },
-  avatarText: { color: theme.colors.primaryText, fontSize: 23, fontWeight: "900" },
-  title: { color: theme.colors.text, fontSize: 19, fontWeight: "800" },
-  status: { color: theme.colors.muted, fontSize: 12 },
-  headerActions: { flexDirection: "row", gap: theme.spacing.sm },
-  list: { flex: 1, padding: theme.spacing.md, backgroundColor: theme.colors.background },
-  typing: { color: theme.colors.muted, paddingHorizontal: theme.spacing.md },
-  notice: { color: theme.colors.muted, paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.xs },
-  composer: { padding: theme.spacing.md, gap: theme.spacing.sm, borderTopWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
-  messageInput: { minHeight: 46, borderRadius: 999, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surfaceSoft, color: theme.colors.text, paddingHorizontal: theme.spacing.md }
+  header: {
+    minHeight: 58,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    backgroundColor: theme.colors.header,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 6
+  },
+  headerIdentity: { flexDirection: "row", alignItems: "center", gap: 9, flex: 1, minWidth: 0 },
+  avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: theme.colors.primary, alignItems: "center", justifyContent: "center" },
+  avatarText: { color: theme.colors.primaryText, fontSize: 19, fontWeight: "900" },
+  headerText: { flex: 1, minWidth: 0 },
+  title: { color: theme.colors.text, fontSize: 18, fontWeight: "800" },
+  status: { color: theme.colors.muted, fontSize: 12, marginTop: 1 },
+  headerActions: { flexDirection: "row", alignItems: "center" },
+  chatArea: { flex: 1, backgroundColor: theme.colors.chatBackground, overflow: "hidden" },
+  wallpaperMark: {
+    position: "absolute",
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: "rgba(255,255,255,0.025)",
+    right: -80,
+    top: 80
+  },
+  wallpaperMarkSmall: { width: 160, height: 160, borderRadius: 80, left: -60, right: undefined, top: 280 },
+  list: { flex: 1 },
+  listContent: { paddingTop: 10, paddingBottom: 12 },
+  notice: {
+    color: theme.colors.text,
+    backgroundColor: theme.colors.notice,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    fontSize: 12
+  },
+  composerWrap: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 6,
+    paddingHorizontal: 7,
+    paddingTop: 5,
+    paddingBottom: Platform.OS === "android" ? 7 : 10,
+    backgroundColor: theme.colors.chatBackground
+  },
+  composer: {
+    flex: 1,
+    minHeight: 46,
+    maxHeight: 116,
+    borderRadius: 23,
+    backgroundColor: theme.colors.composer,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    paddingLeft: 12,
+    paddingRight: 2,
+    paddingVertical: 3
+  },
+  emoji: { color: theme.colors.muted, fontSize: 22, paddingBottom: 8, marginRight: 6 },
+  messageInput: {
+    flex: 1,
+    minHeight: 38,
+    maxHeight: 104,
+    color: theme.colors.text,
+    fontSize: 16,
+    lineHeight: 21,
+    paddingTop: 9,
+    paddingBottom: 8
+  },
+  sendButton: { width: 46, height: 46, minHeight: 46, paddingHorizontal: 0 }
 });

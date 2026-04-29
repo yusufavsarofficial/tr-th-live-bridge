@@ -5,6 +5,11 @@
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0B141A"
+    },
     "userInterfaceStyle": "dark",
     "scheme": "sevgilimchat",
     "assetBundlePatterns": [
@@ -49,7 +54,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/adaptive-icon.png",
+          "icon": "./assets/notification-icon.png",
           "color": "#E53935",
           "defaultChannel": "default"
         }
