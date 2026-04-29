@@ -33,8 +33,21 @@ Canli ortamda `npm run start` kullanilir.
 Android klasorunde:
 
 ```bash
+npm install
+npm run check
+npx expo prebuild --platform android
 eas build -p android --profile preview
 ```
+
+Production AAB icin:
+
+```bash
+eas build -p android --profile production
+```
+
+APK build oncesi `android/src/config/backend.ts` icinde production URL `https://sevgilim-chat.onrender.com` kalmalidir. APK icinde localhost, lokal IP, secret, `.env`, APK/AAB veya build ciktisi repoya eklenmemelidir.
+
+Gerekli Android izinleri sade tutulur: internet, kamera, mikrofon, konum ve konum arka plan servisi.
 
 ## Render/Railway deploy
 

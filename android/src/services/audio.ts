@@ -2,8 +2,11 @@
 import axios from "axios";
 import { BACKEND_URL } from "../config/backend";
 
+const MAX_AUDIO_BYTES = 5 * 1024 * 1024;
+
 export async function startRecording() {
-  await Audio.requestPermissionsAsync();
+  const permission = await Audio.requestPermissionsAsync();
+  if (permission.status !== "granted") throw new Error("MICROPHONE_PERMISSION_REQUIRED");
   await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
   const recording = new Audio.Recording();
   await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
@@ -27,7 +30,9 @@ export async function uploadAudio(uri: string, token: string): Promise<UploadedA
   const form = new FormData();
   form.append("audio", { uri, name: "voice-message.m4a", type: "audio/m4a" } as unknown as string);
   const response = await axios.post(`${BACKEND_URL}/api/uploads/audio`, form, {
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "multipart/form-data" }
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "multipart/form-data" },
+    maxBodyLength: MAX_AUDIO_BYTES,
+    timeout: 30000
   });
   return {
     audioUrl: response.data.audioUrl as string,
@@ -38,6 +43,7 @@ export async function uploadAudio(uri: string, token: string): Promise<UploadedA
 }
 
 export async function playAudio(url: string) {
-  const { sound } = await Audio.Sound.createAsync({ uri: `${BACKEND_URL}${url}` });
+  const uri = url.startsWith("http") ? url : `${BACKEND_URL}${url}`;
+  const { sound } = await Audio.Sound.createAsync({ uri });
   await sound.playAsync();
 }

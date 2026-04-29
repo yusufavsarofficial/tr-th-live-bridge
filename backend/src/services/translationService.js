@@ -2,6 +2,10 @@
 const { env } = require("../config/env");
 
 const langNames = { tr: "Turkish", th: "Thai" };
+const promptByPair = {
+  "tr:th": "Translate from Turkish to natural, short Thai. Do not add explanations. Return only the translation.",
+  "th:tr": "Translate from Thai to natural, short Turkish. Do not add explanations. Return only the translation."
+};
 
 async function translateMessage(text, sourceLang, targetLang) {
   if (!text || sourceLang === targetLang) return text || "";
@@ -13,12 +17,13 @@ async function translateMessage(text, sourceLang, targetLang) {
   }
 
   const client = new OpenAI({ apiKey: env.openaiApiKey });
+  const systemPrompt = promptByPair[`${sourceLang}:${targetLang}`] || "Translate the private chat message naturally and briefly. Do not add explanations. Return only the translation.";
   const response = await client.chat.completions.create({
     model: "gpt-4o-mini",
     temperature: 0,
     messages: [
-      { role: "system", content: "Translate the private chat message. Return only the translation." },
-      { role: "user", content: `Translate from ${langNames[sourceLang] || sourceLang} to ${langNames[targetLang] || targetLang}: ${text}` }
+      { role: "system", content: systemPrompt },
+      { role: "user", content: `Source language: ${langNames[sourceLang] || sourceLang}\nTarget language: ${langNames[targetLang] || targetLang}\nText:\n${text}` }
     ]
   });
   return response.choices[0]?.message?.content?.trim() || "";

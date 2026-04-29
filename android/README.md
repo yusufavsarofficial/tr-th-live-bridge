@@ -26,6 +26,12 @@ Android icinde OpenAI API key, DATABASE_URL, JWT secret, encryption key veya kul
 
 `react-native-webrtc` Expo Go ile calismaz. APK icin EAS build veya custom development build gerekir.
 
+Gorusme ekraninda self-preview, kucultme, kamera/mikrofon ac-kapat, kamera cevirme ve kalite modu kontrolleri vardir. Bazi mobil aglarda TURN sunucusu gerekir.
+
+## Konum
+
+Guvenlik konumu acik riza olmadan baslamaz. Kabul edilirse Android konum izinleri istenir; kullanici ayarlardan konum paylasimini kapatabilir. Arka plan konumu Android pil ve arka plan kurallarina baglidir.
+
 ## APK
 
 `eas.json` icinde `preview` profili APK uretir.

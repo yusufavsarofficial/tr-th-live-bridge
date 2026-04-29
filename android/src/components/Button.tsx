@@ -40,7 +40,8 @@ const styles = StyleSheet.create({
     justifyContent: "center"
   },
   icon: {
-    width: 42,
+    minWidth: 42,
+    width: 50,
     height: 42,
     minHeight: 42,
     paddingHorizontal: 0,

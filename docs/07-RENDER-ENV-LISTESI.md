@@ -8,7 +8,7 @@ PORT=3000
 DATABASE_URL=PostgreSQL baglanti adresi
 JWT_SECRET=Guclu uzun rastgele secret
 MESSAGE_ENCRYPTION_KEY=32 karakterlik encryption key
-PRIVATE_ROOM_CODE=Sadeceikimizsevgilim
+PRIVATE_ROOM_CODE=Ozel oda kodu
 
 USER_A_USERNAME=Yusuf
 USER_A_DISPLAY_NAME=Yusuf

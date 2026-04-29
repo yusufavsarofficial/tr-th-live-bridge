@@ -19,7 +19,7 @@ services:
       - key: MESSAGE_ENCRYPTION_KEY
         sync: false
       - key: PRIVATE_ROOM_CODE
-        value: Sadeceikimizsevgilim
+        sync: false
       - key: USER_A_USERNAME
         value: Yusuf
       - key: USER_A_DISPLAY_NAME

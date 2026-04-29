@@ -11,7 +11,7 @@ SEVGILIM CHAT - SON TESLIM ADIMLARI
 9. eas login yap.
 10. eas build -p android --profile preview komutuyla APK al.
 11. APK'yi telefona yukle.
-12. Yusuf ve Neeja ile oda kodu Sadeceikimizsevgilim kullanarak test et.
+12. Yusuf ve Neeja ile Render backend ortamindaki PRIVATE_ROOM_CODE degerini kullanarak test et.
 13. Goruntulu gorusme baglanmazsa TURN server ekle.
 
 Teslim notu:

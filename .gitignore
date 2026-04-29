@@ -4,10 +4,15 @@
 node_modules/
 dist/
 build/
+coverage/
 .expo/
 .expo-shared/
+.eas/
 android/android/
 android/ios/
+android/dist/
+android/build/
+android/.gradle/
 backend/uploads/*
 !backend/uploads/.gitkeep
 npm-debug.log*
@@ -16,6 +21,9 @@ yarn-error.log*
 .DS_Store
 *.keystore
 *.jks
+*.apk
+*.aab
+*.ipa
 
 LOCAL-GIRIS-BILGILERI.txt
 *.log

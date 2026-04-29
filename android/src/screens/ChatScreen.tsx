@@ -1,36 +1,79 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Audio } from "expo-av";
 import axios from "axios";
-import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  FlatList,
+  KeyboardAvoidingView,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
+} from "react-native";
 import { Button } from "../components/Button";
 import { ChatMessage, MessageBubble } from "../components/MessageBubble";
 import { BACKEND_URL } from "../config/backend";
 import { SOCKET_EVENTS } from "../config/socketEvents";
 import { getStrings } from "../i18n";
-import { clearSession, Session } from "../services/auth";
+import { Session } from "../services/auth";
 import { startRecording, stopRecording, uploadAudio } from "../services/audio";
 import { registerForPushNotifications } from "../services/notifications";
-import { connectSocket, disconnectSocket, getSocket } from "../services/socket";
+import { connectSocket, getSocket } from "../services/socket";
 import { theme } from "../theme/theme";
 import { createCallId } from "../utils/call";
 
-type Props = { session: Session; onLogout: () => void; onOpenCall: (callId: string) => void; onIncomingCall: (callId: string) => void };
+type Props = {
+  session: Session;
+  onLogout: () => void;
+  onOpenSettings: () => void;
+  onOpenCall: (callId: string) => void;
+  onIncomingCall: (callId: string) => void;
+};
+
+type Ack = { ok: boolean; error?: string; message?: ChatMessage };
+
+function normalizeMessage(message: Partial<ChatMessage> & Record<string, unknown>): ChatMessage {
+  return {
+    id: String(message.id || message.client_id || `local-${Date.now()}`),
+    client_id: typeof message.client_id === "string" ? message.client_id : undefined,
+    sender_username: String(message.sender_username || message.sender || ""),
+    receiver_username: typeof message.receiver_username === "string" ? message.receiver_username : undefined,
+    sender_lang: typeof message.sender_lang === "string" ? message.sender_lang : typeof message.senderLang === "string" ? message.senderLang : undefined,
+    target_lang: typeof message.target_lang === "string" ? message.target_lang : typeof message.targetLang === "string" ? message.targetLang : undefined,
+    original_text: String(message.original_text || message.originalText || ""),
+    translated_text: String(message.translated_text || message.translatedText || ""),
+    audio_url: typeof message.audio_url === "string" ? message.audio_url : null,
+    message_type: message.message_type === "audio" ? "audio" : "text",
+    status: message.status === "sending" || message.status === "sent" || message.status === "delivered" || message.status === "read" || message.status === "failed" ? message.status : "sent",
+    read_by: Array.isArray(message.read_by) ? message.read_by.map(String) : [],
+    created_at: typeof message.created_at === "string" ? message.created_at : typeof message.createdAt === "string" ? message.createdAt : new Date().toISOString(),
+    updated_at: typeof message.updated_at === "string" ? message.updated_at : typeof message.updatedAt === "string" ? message.updatedAt : undefined
+  };
+}
 
 function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]) {
+  const withoutOptimistic = current.filter((message) => !incoming.some((next) => next.client_id && message.id === next.client_id));
   const byId = new Map<string, ChatMessage>();
-  [...current, ...incoming].forEach((message) => byId.set(message.id, message));
+  [...withoutOptimistic, ...incoming].forEach((message) => byId.set(message.id, { ...(byId.get(message.id) || {}), ...message }));
   return Array.from(byId.values()).sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
 }
 
-export function ChatScreen({ session, onLogout, onOpenCall, onIncomingCall }: Props) {
+export function ChatScreen({ session, onOpenSettings, onOpenCall, onIncomingCall }: Props) {
   const labels = getStrings(session.user.lang);
   const listRef = useRef<FlatList<ChatMessage>>(null);
+  const atBottomRef = useRef(true);
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initialScrollDoneRef = useRef(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [text, setText] = useState("");
   const [online, setOnline] = useState<string[]>([]);
   const [typingUser, setTypingUser] = useState("");
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [notice, setNotice] = useState("");
+  const [showNewMessage, setShowNewMessage] = useState(false);
   const partner = session.user.username === "Yusuf" ? "Neeja" : "Yusuf";
   const partnerOnline = online.includes(partner);
   const messageLabels = useMemo(() => ({
@@ -39,53 +82,101 @@ export function ChatScreen({ session, onLogout, onOpenCall, onIncomingCall }: Pr
     voiceText: labels.voiceText,
     play: labels.play,
     read: labels.read,
+    sent: labels.sent,
+    delivered: labels.delivered,
+    sending: labels.sending,
+    failed: labels.failed,
+    translating: labels.translating,
     delete: labels.delete
   }), [labels]);
+
+  function friendlyNotice(code: string) {
+    if (code === "BAGLANTI_YOK") return labels.noConnection;
+    if (code === "BAGLANTI_KONTROL_EDILIYOR") return labels.reconnecting;
+    if (code === "SUNUCU_UYANIYOR") return labels.wakingServer;
+    if (code === "AUDIO_FILE_TOO_LARGE") return "Sesli mesaj cok buyuk.";
+    if (code === "MICROPHONE_PERMISSION_REQUIRED") return "Mikrofon izni gerekli.";
+    if (code === "INVALID_TOKEN") return "Oturum suresi doldu, tekrar giris yap.";
+    return "Gecici bir sorun olustu, tekrar deneyin.";
+  }
+
+  function scrollToEnd(animated = true) {
+    requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated }));
+    atBottomRef.current = true;
+    setShowNewMessage(false);
+  }
+
+  function markIncomingAsSeen(socket: ReturnType<typeof getSocket>, message: ChatMessage) {
+    if (message.sender_username === session.user.username) return;
+    socket?.emit(SOCKET_EVENTS.MESSAGE_DELIVERED, { messageId: message.id });
+    socket?.emit(SOCKET_EVENTS.MESSAGE_READ, { messageId: message.id });
+  }
 
   useEffect(() => {
     let active = true;
     const socket = connectSocket(session.token);
     registerForPushNotifications(session.token);
+
     axios.get(`${BACKEND_URL}/api/messages`, {
-      headers: { Authorization: `Bearer ${session.token}` }
+      headers: { Authorization: `Bearer ${session.token}` },
+      timeout: 15000
     }).then((response) => {
-      const nextMessages = (response.data?.messages || []) as ChatMessage[];
       if (!active) return;
+      const nextMessages = ((response.data?.messages || []) as Array<Partial<ChatMessage> & Record<string, unknown>>).map(normalizeMessage);
       setMessages((current) => mergeMessages(current, nextMessages));
-      nextMessages
-        .filter((message) => message.sender_username !== session.user.username && !message.read_by.includes(session.user.username))
-        .forEach((message) => socket.emit(SOCKET_EVENTS.MESSAGE_READ, { messageId: message.id }));
-    }).catch(() => setNotice("MESAJ_GECMISI_YUKLENEMEDI"));
+      nextMessages.forEach((message) => markIncomingAsSeen(socket, message));
+      scrollToEnd(false);
+    }).catch((error) => setNotice(error?.response?.status === 401 ? friendlyNotice("INVALID_TOKEN") : "Mesaj gecmisi yuklenemedi."));
+
     axios.get(`${BACKEND_URL}/api/calls/pending`, {
-      headers: { Authorization: `Bearer ${session.token}` }
+      headers: { Authorization: `Bearer ${session.token}` },
+      timeout: 12000
     }).then((response) => {
       const pendingCall = response.data?.calls?.[0];
       if (active && pendingCall?.call_id) onIncomingCall(pendingCall.call_id);
     }).catch(() => undefined);
 
-    const onMessageNew = (message: ChatMessage) => {
+    const onMessageNew = (raw: ChatMessage) => {
+      const message = normalizeMessage(raw);
       setMessages((current) => mergeMessages(current, [message]));
-      if (message.sender_username !== session.user.username) socket.emit(SOCKET_EVENTS.MESSAGE_READ, { messageId: message.id });
+      markIncomingAsSeen(socket, message);
+      if (message.sender_username === session.user.username || atBottomRef.current) scrollToEnd();
+      else setShowNewMessage(true);
+    };
+    const onMessageUpdated = (raw: ChatMessage) => {
+      const message = normalizeMessage(raw);
+      setMessages((current) => mergeMessages(current, [message]));
+    };
+    const onDeliveryReceipt = ({ messageId }: { messageId: string }) => {
+      setMessages((current) => current.map((item) => item.id === messageId && item.status !== "read" ? { ...item, status: "delivered" } : item));
     };
     const onReadReceipt = ({ messageId, readBy }: { messageId: string; readBy: string }) => {
-      setMessages((current) => current.map((item) => item.id === messageId && !item.read_by.includes(readBy) ? { ...item, read_by: [...item.read_by, readBy] } : item));
+      setMessages((current) => current.map((item) => item.id === messageId && !item.read_by.includes(readBy) ? { ...item, status: "read", read_by: [...item.read_by, readBy] } : item));
     };
     const onMessageDeleted = ({ messageId }: { messageId: string }) => {
       setMessages((current) => current.filter((item) => item.id !== messageId));
     };
     const onPresence = ({ online: nextOnline }: { online: string[] }) => setOnline(nextOnline);
-    const onTypingStart = ({ username }: { username: string }) => setTypingUser(username);
+    const onTypingStart = ({ username }: { username: string }) => {
+      if (username !== session.user.username) setTypingUser(username);
+    };
     const onTypingStop = () => setTypingUser("");
     const onIncoming = ({ callId }: { callId: string }) => onIncomingCall(callId);
     const onConnect = () => setNotice("");
-    const onConnectError = () => setNotice("BAGLANTI_KONTROL_EDILIYOR");
+    const onDisconnect = () => setNotice(friendlyNotice("BAGLANTI_KONTROL_EDILIYOR"));
+    const onReconnectAttempt = (attempt: number) => setNotice(attempt > 1 ? friendlyNotice("SUNUCU_UYANIYOR") : friendlyNotice("BAGLANTI_KONTROL_EDILIYOR"));
+    const onConnectError = () => setNotice(friendlyNotice("SUNUCU_UYANIYOR"));
     const onError = ({ error, recoverable }: { error: string; recoverable?: boolean }) => {
-      if (recoverable) setNotice(error);
+      if (recoverable) setNotice(friendlyNotice(error));
     };
 
     socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    socket.io.on("reconnect_attempt", onReconnectAttempt);
     socket.on(SOCKET_EVENTS.CONNECT_ERROR, onConnectError);
     socket.on(SOCKET_EVENTS.MESSAGE_NEW, onMessageNew);
+    socket.on(SOCKET_EVENTS.MESSAGE_UPDATED, onMessageUpdated);
+    socket.on(SOCKET_EVENTS.MESSAGE_DELIVERY_RECEIPT, onDeliveryReceipt);
     socket.on(SOCKET_EVENTS.MESSAGE_READ_RECEIPT, onReadReceipt);
     socket.on(SOCKET_EVENTS.MESSAGE_DELETED, onMessageDeleted);
     socket.on(SOCKET_EVENTS.PRESENCE_UPDATE, onPresence);
@@ -97,8 +188,12 @@ export function ChatScreen({ session, onLogout, onOpenCall, onIncomingCall }: Pr
     return () => {
       active = false;
       socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+      socket.io.off("reconnect_attempt", onReconnectAttempt);
       socket.off(SOCKET_EVENTS.CONNECT_ERROR, onConnectError);
       socket.off(SOCKET_EVENTS.MESSAGE_NEW, onMessageNew);
+      socket.off(SOCKET_EVENTS.MESSAGE_UPDATED, onMessageUpdated);
+      socket.off(SOCKET_EVENTS.MESSAGE_DELIVERY_RECEIPT, onDeliveryReceipt);
       socket.off(SOCKET_EVENTS.MESSAGE_READ_RECEIPT, onReadReceipt);
       socket.off(SOCKET_EVENTS.MESSAGE_DELETED, onMessageDeleted);
       socket.off(SOCKET_EVENTS.PRESENCE_UPDATE, onPresence);
@@ -106,57 +201,116 @@ export function ChatScreen({ session, onLogout, onOpenCall, onIncomingCall }: Pr
       socket.off(SOCKET_EVENTS.TYPING_STOP, onTypingStop);
       socket.off(SOCKET_EVENTS.CALL_INCOMING, onIncoming);
       socket.off(SOCKET_EVENTS.ERROR, onError);
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
     };
   }, [onIncomingCall, session.token, session.user.username]);
 
-  useEffect(() => {
-    requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
-  }, [messages.length]);
+  function onListScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const nearBottom = contentOffset.y + layoutMeasurement.height >= contentSize.height - 96;
+    atBottomRef.current = nearBottom;
+    if (nearBottom) setShowNewMessage(false);
+  }
+
+  function handleTyping(value: string) {
+    setText(value);
+    const socket = getSocket();
+    socket?.emit(value ? SOCKET_EVENTS.TYPING_START : SOCKET_EVENTS.TYPING_STOP);
+    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    typingTimerRef.current = setTimeout(() => socket?.emit(SOCKET_EVENTS.TYPING_STOP), 2500);
+  }
+
+  function sendOptimistic(payload: { text: string; messageType: "text" | "audio"; audioUrl?: string | null; translatedText?: string }) {
+    const socket = getSocket();
+    if (!socket?.connected) {
+      setNotice(friendlyNotice("BAGLANTI_YOK"));
+      return;
+    }
+
+    const clientId = `local-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const optimistic = normalizeMessage({
+      id: clientId,
+      client_id: clientId,
+      sender_username: session.user.username,
+      receiver_username: partner,
+      sender_lang: session.user.lang,
+      target_lang: session.user.lang === "tr" ? "th" : "tr",
+      original_text: payload.text,
+      translated_text: payload.translatedText || "",
+      audio_url: payload.audioUrl || null,
+      message_type: payload.messageType,
+      status: "sending",
+      read_by: [],
+      created_at: new Date().toISOString()
+    });
+    setMessages((current) => mergeMessages(current, [optimistic]));
+    scrollToEnd();
+
+    socket.emit(SOCKET_EVENTS.MESSAGE_SEND, {
+      clientId,
+      text: payload.text,
+      translatedText: payload.translatedText,
+      audioUrl: payload.audioUrl,
+      messageType: payload.messageType
+    }, (ack: Ack) => {
+      if (!ack.ok || !ack.message) {
+        setMessages((current) => current.map((item) => item.id === clientId ? { ...item, status: "failed" } : item));
+        setNotice(friendlyNotice(ack.error || "MESSAGE_SEND_FAILED"));
+        return;
+      }
+      const ackMessage = ack.message;
+      setNotice("");
+      setMessages((current) => mergeMessages(current.filter((item) => item.id !== clientId), [{ ...normalizeMessage(ackMessage), client_id: clientId }]));
+      scrollToEnd();
+    });
+  }
 
   function sendText() {
     const trimmed = text.trim();
     if (!trimmed) return;
-    const socket = getSocket();
-    if (!socket) {
-      setNotice("BAGLANTI_YOK");
-      return;
-    }
-    socket.emit(SOCKET_EVENTS.MESSAGE_SEND, { text: trimmed, messageType: "text" }, (ack: { ok: boolean; error?: string }) => {
-      if (!ack.ok) setNotice(ack.error || "MESSAGE_SEND_FAILED");
-      else setNotice("");
-    });
-    socket.emit(SOCKET_EVENTS.TYPING_STOP);
     setText("");
+    getSocket()?.emit(SOCKET_EVENTS.TYPING_STOP);
+    sendOptimistic({ text: trimmed, messageType: "text" });
   }
 
   async function toggleRecording() {
-    if (recording) {
-      const uri = await stopRecording(recording);
-      setRecording(null);
-      if (uri) {
-        const uploaded = await uploadAudio(uri, session.token);
-        getSocket()?.emit(SOCKET_EVENTS.MESSAGE_SEND, {
-          audioUrl: uploaded.audioUrl,
-          text: uploaded.originalText,
-          translatedText: uploaded.translatedText,
-          messageType: "audio"
-        });
-        if (uploaded.warning) setNotice(uploaded.warning);
+    try {
+      if (recording) {
+        const uri = await stopRecording(recording);
+        setRecording(null);
+        if (uri) {
+          const uploaded = await uploadAudio(uri, session.token);
+          sendOptimistic({
+            audioUrl: uploaded.audioUrl,
+            text: uploaded.originalText || "",
+            translatedText: uploaded.translatedText || "",
+            messageType: "audio"
+          });
+          if (uploaded.warning) setNotice(friendlyNotice(uploaded.warning));
+        }
+        return;
       }
-      return;
+      setRecording(await startRecording());
+    } catch (error) {
+      setRecording(null);
+      setNotice(friendlyNotice(error instanceof Error ? error.message : "AUDIO_FAILED"));
     }
-    setRecording(await startRecording());
   }
 
   function startCall() {
+    const socket = getSocket();
+    if (!socket?.connected) {
+      setNotice(friendlyNotice("BAGLANTI_YOK"));
+      return;
+    }
     const callId = createCallId();
-    getSocket()?.emit(SOCKET_EVENTS.CALL_START, { callId });
+    socket.emit(SOCKET_EVENTS.CALL_START, { callId });
     onOpenCall(callId);
   }
 
   function deleteMessage(messageId: string) {
     getSocket()?.emit(SOCKET_EVENTS.MESSAGE_DELETE, { messageId }, (ack: { ok: boolean; error?: string }) => {
-      if (!ack.ok) setNotice(ack.error || "MESSAGE_DELETE_FAILED");
+      if (!ack.ok) setNotice(friendlyNotice(ack.error || "MESSAGE_DELETE_FAILED"));
     });
   }
 
@@ -177,14 +331,12 @@ export function ChatScreen({ session, onLogout, onOpenCall, onIncomingCall }: Pr
           </View>
         </View>
         <View style={styles.headerActions}>
-          <Button label="☎" onPress={startCall} variant="icon" />
-          <Button label="⋮" onPress={async () => { await clearSession(); disconnectSocket(); onLogout(); }} variant="icon" />
+          <Button label="Cam" onPress={startCall} variant="icon" />
+          <Button label="Ayar" onPress={onOpenSettings} variant="icon" />
         </View>
       </View>
 
       <View style={styles.chatArea}>
-        <View style={styles.wallpaperMark} />
-        <View style={[styles.wallpaperMark, styles.wallpaperMarkSmall]} />
         <FlatList
           ref={listRef}
           style={styles.list}
@@ -195,37 +347,50 @@ export function ChatScreen({ session, onLogout, onOpenCall, onIncomingCall }: Pr
             <MessageBubble
               message={item}
               mine={item.sender_username === session.user.username}
-              read={item.read_by.includes(partner)}
-              canDelete={session.user.username === "Yusuf"}
+              read={item.read_by.includes(partner) || item.status === "read"}
+              canDelete={session.user.username === "Yusuf" && !item.id.startsWith("local-")}
               onDelete={deleteMessage}
               labels={messageLabels}
             />
           )}
           keyboardShouldPersistTaps="handled"
-          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
+          onScroll={onListScroll}
+          scrollEventThrottle={80}
+          initialNumToRender={28}
+          maxToRenderPerBatch={24}
+          windowSize={12}
+          removeClippedSubviews
+          onContentSizeChange={() => {
+            if (!initialScrollDoneRef.current || atBottomRef.current) {
+              initialScrollDoneRef.current = true;
+              scrollToEnd(false);
+            }
+          }}
         />
+        {showNewMessage ? (
+          <Pressable style={styles.newMessageButton} onPress={() => scrollToEnd()}>
+            <Text style={styles.newMessageText}>{labels.newMessage}</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {notice ? <Text style={styles.notice}>{notice}</Text> : null}
 
       <View style={styles.composerWrap}>
         <View style={styles.composer}>
-          <Text style={styles.emoji}>☺</Text>
+          <Text style={styles.emoji}>+</Text>
           <TextInput
             style={styles.messageInput}
             value={text}
-            onChangeText={(value) => {
-              setText(value);
-              getSocket()?.emit(value ? SOCKET_EVENTS.TYPING_START : SOCKET_EVENTS.TYPING_STOP);
-            }}
+            onChangeText={handleTyping}
             placeholder={labels.messagePlaceholder}
             placeholderTextColor={theme.colors.muted}
             multiline
             maxLength={4000}
           />
-          <Button label={recording ? "■" : "🎙"} onPress={toggleRecording} variant="icon" />
+          <Button label={recording ? "Stop" : "Mic"} onPress={toggleRecording} variant="icon" />
         </View>
-        <Button label={text.trim() ? "➤" : "☎"} onPress={text.trim() ? sendText : startCall} style={styles.sendButton} />
+        <Button label={text.trim() ? "Send" : "Cam"} onPress={text.trim() ? sendText : startCall} style={styles.sendButton} />
       </View>
     </KeyboardAvoidingView>
   );
@@ -249,20 +414,20 @@ const styles = StyleSheet.create({
   headerText: { flex: 1, minWidth: 0 },
   title: { color: theme.colors.text, fontSize: 18, fontWeight: "800" },
   status: { color: theme.colors.muted, fontSize: 12, marginTop: 1 },
-  headerActions: { flexDirection: "row", alignItems: "center" },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 2 },
   chatArea: { flex: 1, backgroundColor: theme.colors.chatBackground, overflow: "hidden" },
-  wallpaperMark: {
-    position: "absolute",
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: "rgba(255,255,255,0.025)",
-    right: -80,
-    top: 80
-  },
-  wallpaperMarkSmall: { width: 160, height: 160, borderRadius: 80, left: -60, right: undefined, top: 280 },
   list: { flex: 1 },
   listContent: { paddingTop: 10, paddingBottom: 12 },
+  newMessageButton: {
+    position: "absolute",
+    right: 12,
+    bottom: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 18,
+    backgroundColor: theme.colors.primary
+  },
+  newMessageText: { color: theme.colors.primaryText, fontSize: 12, fontWeight: "800" },
   notice: {
     color: theme.colors.text,
     backgroundColor: theme.colors.notice,
@@ -302,5 +467,5 @@ const styles = StyleSheet.create({
     paddingTop: 9,
     paddingBottom: 8
   },
-  sendButton: { width: 46, height: 46, minHeight: 46, paddingHorizontal: 0 }
+  sendButton: { width: 54, height: 46, minHeight: 46, paddingHorizontal: 0 }
 });

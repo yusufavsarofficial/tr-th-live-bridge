@@ -3,6 +3,7 @@ const { pool } = require("../db/pool");
 const { encryptValue, serializeMessage } = require("../services/encryptionService");
 const { translateMessage } = require("../services/translationService");
 const { sendPushToPartner } = require("../services/pushService");
+const { getLatestPartnerLocation, saveLocation } = require("../routes/locations");
 const { SOCKET_EVENTS } = require("./events");
 
 const onlineUsers = new Map();
@@ -10,6 +11,11 @@ const MAX_TEXT_LENGTH = 4000;
 const MAX_CALL_ID_LENGTH = 120;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CALL_ID_RE = /^[a-zA-Z0-9._:-]{1,120}$/;
+const TRANSLATION_FAILED_TEXT = "Ceviri alinamadi";
+
+function getPartnerUsername(username) {
+  return username === "Yusuf" ? "Neeja" : "Yusuf";
+}
 
 function socketRateLimit(socket, key, limit, windowMs) {
   socket.data.rateLimits ||= {};
@@ -26,6 +32,37 @@ function socketRateLimit(socket, key, limit, windowMs) {
 
 function emitPresence(io) {
   io.emit(SOCKET_EVENTS.PRESENCE_UPDATE, { online: Array.from(onlineUsers.keys()) });
+}
+
+async function translateAndUpdateMessage(io, message, originalText, sourceLang, targetLang) {
+  try {
+    const translatedText = await translateMessage(originalText, sourceLang, targetLang);
+    const result = await pool.query(`
+      UPDATE messages
+      SET translated_text_encrypted = $2,
+          status = CASE WHEN status = 'sending' THEN 'sent' ELSE status END,
+          updated_at = NOW()
+      WHERE id = $1
+      RETURNING id, sender_username, sender_display_name, receiver_username, sender_lang, target_lang,
+        original_text, translated_text, audio_url,
+        original_text_encrypted, translated_text_encrypted, audio_url_encrypted,
+        message_type, status, read_by, created_at, updated_at
+    `, [message.id, encryptValue(translatedText || TRANSLATION_FAILED_TEXT)]);
+    if (result.rowCount) io.to("private-room").emit(SOCKET_EVENTS.MESSAGE_UPDATED, serializeMessage(result.rows[0]));
+  } catch (error) {
+    console.warn("Translation failed", error.code || error.message || "TRANSLATION_FAILED");
+    const result = await pool.query(`
+      UPDATE messages
+      SET translated_text_encrypted = $2,
+          updated_at = NOW()
+      WHERE id = $1
+      RETURNING id, sender_username, sender_display_name, receiver_username, sender_lang, target_lang,
+        original_text, translated_text, audio_url,
+        original_text_encrypted, translated_text_encrypted, audio_url_encrypted,
+        message_type, status, read_by, created_at, updated_at
+    `, [message.id, encryptValue(TRANSLATION_FAILED_TEXT)]);
+    if (result.rowCount) io.to("private-room").emit(SOCKET_EVENTS.MESSAGE_UPDATED, serializeMessage(result.rows[0]));
+  }
 }
 
 function registerSockets(io) {
@@ -60,42 +97,32 @@ function registerSockets(io) {
           return;
         }
         const targetLang = user.lang === "tr" ? "th" : "tr";
-        let translatedText = String(payload.translatedText || "").slice(0, MAX_TEXT_LENGTH);
-
-        if (messageType === "text") {
-          try {
-            translatedText = await translateMessage(originalText, user.lang, targetLang);
-          } catch (error) {
-            translatedText = "";
-            socket.emit(SOCKET_EVENTS.ERROR, {
-              error: error.code || "TRANSLATION_FAILED",
-              recoverable: true
-            });
-          }
-        }
+        const translatedText = messageType === "audio" ? String(payload.translatedText || "").slice(0, MAX_TEXT_LENGTH) : "";
+        const receiverUsername = getPartnerUsername(user.username);
 
         const result = await pool.query(
           `INSERT INTO messages
             (room_code, sender_username, sender_display_name, sender_lang, target_lang,
-             original_text_encrypted, translated_text_encrypted, audio_url_encrypted, message_type)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-           RETURNING id, sender_username, sender_display_name, sender_lang, target_lang,
+             receiver_username, original_text_encrypted, translated_text_encrypted, audio_url_encrypted, message_type, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'sent')
+           RETURNING id, sender_username, sender_display_name, receiver_username, sender_lang, target_lang,
              original_text, translated_text, audio_url,
              original_text_encrypted, translated_text_encrypted, audio_url_encrypted,
-             message_type, read_by, created_at`,
+             message_type, status, read_by, created_at, updated_at`,
           [
             "private-room",
             user.username,
             user.displayName,
             user.lang,
             targetLang,
+            receiverUsername,
             encryptValue(originalText),
             encryptValue(translatedText),
             payload.audioUrl ? encryptValue(payload.audioUrl) : null,
             messageType
           ]
         );
-        const message = serializeMessage(result.rows[0]);
+        const message = { ...serializeMessage(result.rows[0]), client_id: String(payload.clientId || "") || undefined };
         io.to("private-room").emit(SOCKET_EVENTS.MESSAGE_NEW, message);
         sendPushToPartner(user.username, {
           title: user.displayName || user.username,
@@ -103,6 +130,9 @@ function registerSockets(io) {
           data: { type: "message", messageId: message.id }
         });
         if (callback) callback({ ok: true, message });
+        if (messageType === "text") {
+          translateAndUpdateMessage(io, message, originalText, user.lang, targetLang);
+        }
       } catch (error) {
         const code = error.code || "MESSAGE_SEND_FAILED";
         if (callback) callback({ ok: false, error: code });
@@ -118,8 +148,24 @@ function registerSockets(io) {
     });
     socket.on(SOCKET_EVENTS.MESSAGE_READ, async ({ messageId }) => {
       if (!UUID_RE.test(String(messageId || ""))) return;
-      await pool.query("UPDATE messages SET read_by = array_append(read_by, $1) WHERE id = $2 AND NOT ($1 = ANY(read_by))", [user.username, messageId]);
+      await pool.query(`
+        UPDATE messages
+        SET read_by = array_append(read_by, $1),
+            status = 'read',
+            updated_at = NOW()
+        WHERE id = $2 AND sender_username <> $1 AND NOT ($1 = ANY(read_by))
+      `, [user.username, messageId]);
       socket.to("private-room").emit(SOCKET_EVENTS.MESSAGE_READ_RECEIPT, { messageId, readBy: user.username });
+    });
+    socket.on(SOCKET_EVENTS.MESSAGE_DELIVERED, async ({ messageId }) => {
+      if (!UUID_RE.test(String(messageId || ""))) return;
+      await pool.query(`
+        UPDATE messages
+        SET status = CASE WHEN status = 'sent' THEN 'delivered' ELSE status END,
+            updated_at = NOW()
+        WHERE id = $1 AND sender_username <> $2
+      `, [messageId, user.username]);
+      socket.to("private-room").emit(SOCKET_EVENTS.MESSAGE_DELIVERY_RECEIPT, { messageId, deliveredBy: user.username });
     });
     socket.on(SOCKET_EVENTS.MESSAGE_DELETE, async ({ messageId } = {}, callback) => {
       try {
@@ -185,6 +231,30 @@ function registerSockets(io) {
         originalText: String(payload.originalText || "").slice(0, MAX_TEXT_LENGTH),
         translatedText: String(payload.translatedText || "").slice(0, MAX_TEXT_LENGTH)
       });
+    });
+
+    socket.on(SOCKET_EVENTS.LOCATION_UPDATE, async (payload = {}, callback) => {
+      try {
+        const location = await saveLocation(user.username, payload);
+        socket.to("private-room").emit(SOCKET_EVENTS.LOCATION_UPDATE, { from: user.username, location });
+        if (callback) callback({ ok: true, location });
+      } catch (error) {
+        if (callback) callback({ ok: false, error: error.message || "LOCATION_UPDATE_FAILED" });
+      }
+    });
+    socket.on(SOCKET_EVENTS.LOCATION_LATEST, async (payload = {}, callback) => {
+      try {
+        const location = await getLatestPartnerLocation(user.username);
+        if (callback) callback({ ok: true, location });
+      } catch {
+        if (callback) callback({ ok: false, error: "LOCATION_LATEST_FAILED" });
+      }
+    });
+    socket.on(SOCKET_EVENTS.LOCATION_SHARING_ENABLED, () => {
+      socket.to("private-room").emit(SOCKET_EVENTS.LOCATION_SHARING_ENABLED, { username: user.username });
+    });
+    socket.on(SOCKET_EVENTS.LOCATION_SHARING_DISABLED, () => {
+      socket.to("private-room").emit(SOCKET_EVENTS.LOCATION_SHARING_DISABLED, { username: user.username });
     });
 
     socket.on("disconnect", () => {

@@ -9,6 +9,7 @@ const { transcribeNeejaAudio } = require("../services/speechService");
 const uploadDir = path.resolve(__dirname, "../../uploads");
 fs.mkdirSync(uploadDir, { recursive: true });
 const allowedExtensions = new Set([".aac", ".m4a", ".mp3", ".ogg", ".wav", ".webm"]);
+const MAX_AUDIO_BYTES = 5 * 1024 * 1024;
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
@@ -21,7 +22,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: MAX_AUDIO_BYTES },
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname || ".m4a").toLowerCase();
     if (!file.mimetype.startsWith("audio/") || !allowedExtensions.has(ext)) return cb(new Error("ONLY_AUDIO_ALLOWED"));
@@ -52,6 +53,7 @@ router.post("/api/uploads/audio", authMiddleware, upload.single("audio"), async 
 });
 
 router.use((error, req, res, next) => {
+  if (error?.code === "LIMIT_FILE_SIZE") return res.status(413).json({ error: "AUDIO_FILE_TOO_LARGE" });
   if (error) return res.status(400).json({ error: error.message || "UPLOAD_FAILED" });
   return next();
 });

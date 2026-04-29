@@ -16,13 +16,24 @@ async function initDb() {
       translated_text TEXT,
       audio_url TEXT,
       message_type TEXT NOT NULL DEFAULT 'text',
+      receiver_username TEXT,
+      status TEXT NOT NULL DEFAULT 'sent',
       read_by TEXT[] NOT NULL DEFAULT '{}',
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
   await pool.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS original_text_encrypted TEXT;");
   await pool.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS translated_text_encrypted TEXT;");
   await pool.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS audio_url_encrypted TEXT;");
+  await pool.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS receiver_username TEXT;");
+  await pool.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'sent';");
+  await pool.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();");
+  await pool.query(`
+    UPDATE messages
+    SET receiver_username = CASE WHEN sender_username = 'Yusuf' THEN 'Neeja' ELSE 'Yusuf' END
+    WHERE receiver_username IS NULL
+  `);
   await pool.query("CREATE INDEX IF NOT EXISTS idx_messages_room_created_at ON messages (room_code, created_at DESC);");
   await pool.query("CREATE INDEX IF NOT EXISTS idx_messages_sender_created_at ON messages (sender_username, created_at DESC);");
 
@@ -72,6 +83,20 @@ async function initDb() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS location_shares (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id TEXT NOT NULL,
+      latitude DOUBLE PRECISION NOT NULL,
+      longitude DOUBLE PRECISION NOT NULL,
+      accuracy DOUBLE PRECISION,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL
+    );
+  `);
+  await pool.query("CREATE INDEX IF NOT EXISTS idx_location_shares_user_created_at ON location_shares (user_id, created_at DESC);");
+  await pool.query("CREATE INDEX IF NOT EXISTS idx_location_shares_expires_at ON location_shares (expires_at);");
+  await pool.query("DELETE FROM location_shares WHERE expires_at < NOW();");
 }
 
 module.exports = { initDb };

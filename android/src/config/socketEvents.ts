@@ -3,6 +3,9 @@
   AUTHENTICATED: "auth:authenticated",
   MESSAGE_SEND: "message:send",
   MESSAGE_NEW: "message:new",
+  MESSAGE_UPDATED: "message:updated",
+  MESSAGE_DELIVERED: "message:delivered",
+  MESSAGE_DELIVERY_RECEIPT: "message:delivery-receipt",
   MESSAGE_READ: "message:read",
   MESSAGE_READ_RECEIPT: "message:read-receipt",
   MESSAGE_DELETE: "message:delete",
@@ -22,5 +25,9 @@
   WEBRTC_ANSWER: "webrtc:answer",
   WEBRTC_ICE_CANDIDATE: "webrtc:ice-candidate",
   CALL_VOICE_TRANSLATION: "call:voice-translation",
+  LOCATION_UPDATE: "location:update",
+  LOCATION_LATEST: "location:latest",
+  LOCATION_SHARING_ENABLED: "location:sharing_enabled",
+  LOCATION_SHARING_DISABLED: "location:sharing_disabled",
   ERROR: "error"
 } as const;

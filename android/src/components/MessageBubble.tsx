@@ -5,13 +5,19 @@ import { theme } from "../theme/theme";
 
 export type ChatMessage = {
   id: string;
+  client_id?: string;
   sender_username: string;
+  receiver_username?: string;
+  sender_lang?: string;
+  target_lang?: string;
   original_text: string;
   translated_text: string;
   audio_url?: string | null;
   message_type: "text" | "audio";
+  status?: "sending" | "sent" | "delivered" | "read" | "failed";
   read_by: string[];
   created_at?: string;
+  updated_at?: string;
 };
 
 type Props = {
@@ -20,7 +26,19 @@ type Props = {
   read: boolean;
   canDelete: boolean;
   onDelete: (messageId: string) => void;
-  labels: { original: string; translation: string; voiceText: string; play: string; read: string; delete: string };
+  labels: {
+    original: string;
+    translation: string;
+    voiceText: string;
+    play: string;
+    read: string;
+    sent: string;
+    delivered: string;
+    sending: string;
+    failed: string;
+    translating: string;
+    delete: string;
+  };
 };
 
 function timeLabel(value?: string) {
@@ -31,7 +49,21 @@ function timeLabel(value?: string) {
 }
 
 export function MessageBubble({ message, mine, read, canDelete, onDelete, labels }: Props) {
-  const hasTranslation = Boolean(message.translated_text && message.translated_text !== message.original_text);
+  const translated = message.translated_text || "";
+  const original = message.original_text || "";
+  const waitingForTranslation = message.message_type === "text" && !translated;
+  const mainText = mine ? original : translated || labels.translating;
+  const secondaryText = mine ? translated : original;
+  const status = read ? "read" : message.status || "sent";
+  const statusLabel = status === "sending"
+    ? labels.sending
+    : status === "failed"
+      ? labels.failed
+      : status === "read"
+        ? labels.read
+        : status === "delivered"
+          ? labels.delivered
+          : labels.sent;
 
   return (
     <View style={[styles.wrap, mine ? styles.mineWrap : styles.otherWrap]}>
@@ -41,12 +73,11 @@ export function MessageBubble({ message, mine, read, canDelete, onDelete, labels
         style={[styles.bubble, mine ? styles.mine : styles.other]}
       >
         <View style={[styles.tail, mine ? styles.mineTail : styles.otherTail]} />
-        <Text style={[styles.sender, mine && styles.mineSender]}>{message.sender_username}</Text>
 
         {message.message_type === "audio" && message.audio_url ? (
           <View style={styles.voiceRow}>
             <Pressable style={styles.playButton} onPress={() => playAudio(message.audio_url || "")}>
-              <Text style={styles.playIcon}>▶</Text>
+              <Text style={styles.playIcon}>{labels.play}</Text>
             </Pressable>
             <View style={styles.voiceLine}>
               <View style={styles.wave} />
@@ -58,18 +89,18 @@ export function MessageBubble({ message, mine, read, canDelete, onDelete, labels
           </View>
         ) : null}
 
-        {message.original_text ? <Text style={styles.text}>{message.original_text}</Text> : null}
+        {mainText ? <Text style={[styles.text, waitingForTranslation && !mine && styles.pendingText]}>{mainText}</Text> : null}
 
-        {hasTranslation ? (
+        {secondaryText && secondaryText !== mainText ? (
           <View style={styles.translationBox}>
-            <Text style={styles.translationLabel}>{labels.translation}</Text>
-            <Text style={styles.translation}>{message.translated_text}</Text>
+            <Text style={styles.translationLabel}>{mine ? labels.translation : labels.original}</Text>
+            <Text style={styles.translation}>{secondaryText}</Text>
           </View>
         ) : null}
 
         <View style={styles.metaRow}>
           <Text style={styles.time}>{timeLabel(message.created_at)}</Text>
-          {mine && read ? <Text style={styles.read}>{labels.read}</Text> : null}
+          {mine ? <Text style={[styles.read, status === "failed" && styles.failed]}>{statusLabel}</Text> : null}
         </View>
       </Pressable>
     </View>
@@ -100,9 +131,8 @@ const styles = StyleSheet.create({
   },
   mineTail: { right: -4, backgroundColor: theme.colors.bubbleMine },
   otherTail: { left: -4, backgroundColor: theme.colors.bubbleOther },
-  sender: { color: theme.colors.primary, fontWeight: "800", marginBottom: 3, fontSize: 12 },
-  mineSender: { color: "#7FE0C3" },
   text: { color: theme.colors.text, fontSize: 16, lineHeight: 21 },
+  pendingText: { color: theme.colors.muted, fontStyle: "italic" },
   translationBox: {
     marginTop: 6,
     borderLeftWidth: 3,
@@ -114,19 +144,20 @@ const styles = StyleSheet.create({
   translation: { color: theme.colors.text, fontSize: 14, lineHeight: 19 },
   voiceRow: { flexDirection: "row", alignItems: "center", gap: 10, minWidth: 190, marginBottom: 5 },
   playButton: {
-    width: 34,
+    width: 44,
     height: 34,
     borderRadius: 17,
     backgroundColor: theme.colors.primary,
     alignItems: "center",
     justifyContent: "center"
   },
-  playIcon: { color: theme.colors.primaryText, fontSize: 15, marginLeft: 2 },
+  playIcon: { color: theme.colors.primaryText, fontSize: 11, fontWeight: "900" },
   voiceLine: { flex: 1, flexDirection: "row", alignItems: "center", gap: 5 },
   wave: { flex: 1, height: 4, borderRadius: 999, backgroundColor: theme.colors.muted },
   waveTall: { height: 8 },
   waveShort: { height: 3 },
   metaRow: { marginTop: 3, flexDirection: "row", justifyContent: "flex-end", alignItems: "center", gap: 5 },
   time: { color: theme.colors.muted, fontSize: 10 },
-  read: { color: "#69D6FF", fontSize: 10, fontWeight: "700" }
+  read: { color: "#69D6FF", fontSize: 10, fontWeight: "700" },
+  failed: { color: theme.colors.danger }
 });

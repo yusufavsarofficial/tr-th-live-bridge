@@ -2,12 +2,15 @@
 import { SafeAreaView, StyleSheet } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { ChatScreen } from "./src/screens/ChatScreen";
+import { LocationConsentScreen } from "./src/screens/LocationConsentScreen";
 import { LoginScreen } from "./src/screens/LoginScreen";
+import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { VideoCallScreen } from "./src/screens/VideoCallScreen";
 import { getStoredSession, Session } from "./src/services/auth";
+import { getLocationConsent, startLocationSharing } from "./src/services/location";
 import { theme } from "./src/theme/theme";
 
-type Screen = "login" | "chat" | "call";
+type Screen = "login" | "chat" | "location-consent";
 type CallMode = "incoming" | "outgoing";
 
 export default function App() {
@@ -15,22 +18,53 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>("login");
   const [callId, setCallId] = useState<string | null>(null);
   const [callMode, setCallMode] = useState<CallMode>("outgoing");
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
-    getStoredSession().then((stored) => {
+    getStoredSession().then(async (stored) => {
       if (stored) {
         setSession(stored);
-        setScreen("chat");
+        const consent = await getLocationConsent();
+        if (consent === "accepted") startLocationSharing(stored).catch(() => undefined);
+        setScreen(consent ? "chat" : "location-consent");
       }
     });
   }, []);
 
+  async function enterAfterLogin(next: Session) {
+    setSession(next);
+    const consent = await getLocationConsent();
+    if (consent === "accepted") startLocationSharing(next).catch(() => undefined);
+    setScreen(consent ? "chat" : "location-consent");
+  }
+
+  function logout() {
+    setSession(null);
+    setCallId(null);
+    setSettingsOpen(false);
+    setScreen("login");
+  }
+
   return (
     <SafeAreaView style={styles.root}>
       <StatusBar style="light" />
-      {screen === "login" || !session ? <LoginScreen onLogin={(next) => { setSession(next); setScreen("chat"); }} /> : null}
-      {screen === "chat" && session ? <ChatScreen session={session} onLogout={() => { setSession(null); setScreen("login"); }} onOpenCall={(nextCallId) => { setCallId(nextCallId); setCallMode("outgoing"); setScreen("call"); }} onIncomingCall={(nextCallId) => { setCallId(nextCallId); setCallMode("incoming"); setScreen("call"); }} /> : null}
-      {screen === "call" && session ? <VideoCallScreen session={session} callId={callId} mode={callMode} onClose={() => { setCallId(null); setScreen("chat"); }} /> : null}
+      {screen === "login" || !session ? <LoginScreen onLogin={enterAfterLogin} /> : null}
+      {screen === "location-consent" && session ? <LocationConsentScreen session={session} onDone={() => setScreen("chat")} /> : null}
+      {screen === "chat" && session ? (
+        <ChatScreen
+          session={session}
+          onLogout={logout}
+          onOpenSettings={() => setSettingsOpen(true)}
+          onOpenCall={(nextCallId) => { setCallId(nextCallId); setCallMode("outgoing"); }}
+          onIncomingCall={(nextCallId) => { setCallId(nextCallId); setCallMode("incoming"); }}
+        />
+      ) : null}
+      {screen === "chat" && session && callId ? (
+        <VideoCallScreen session={session} callId={callId} mode={callMode} onClose={() => setCallId(null)} />
+      ) : null}
+      {screen === "chat" && session && settingsOpen ? (
+        <SettingsScreen session={session} onClose={() => setSettingsOpen(false)} onLogout={logout} />
+      ) : null}
     </SafeAreaView>
   );
 }

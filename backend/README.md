@@ -27,11 +27,18 @@ Zorunlu alanlar: `PORT`, `DATABASE_URL`, `JWT_SECRET`, `MESSAGE_ENCRYPTION_KEY`,
 
 - `GET /health`
 - `POST /api/auth/login`
+- `GET /api/messages`
+- `GET /api/location/latest`
+- `POST /api/location`
 - `POST /api/uploads/audio`
 
 ## Guvenlik
 
 Helmet, CORS, rate limit, JWT auth ve audio upload sinirlari kullanilir. Sifreler env tarafinda bcrypt hash olarak tutulmalidir.
+
+Mesajlar backend tarafinda sifreli saklanir. Ceviri OpenAI ile backend uzerinden yapildigi icin mesaj metni ceviri amaciyla backend tarafinda islenir; bu model gercek uctan uca sifreleme degildir.
+
+Konum paylasimi yalnizca acik riza sonrasi calisir. Konum koordinatlari loglanmaz ve `location_shares` kayitlari 24 saatlik TTL ile sinirlanir.
 
 ## Socket eventleri
 

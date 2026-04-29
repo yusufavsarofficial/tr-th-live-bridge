@@ -1,16 +1,15 @@
 # Sevgilim Chat
 
-Sevgilim Chat, sadece Yusuf ve Neeja icin hazirlanan ozel Android mesajlasma, sesli mesaj ve goruntulu gorusme uygulamasidir. Web sitesi yoktur, InfinityFree kullanilmaz.
+Sevgilim Chat, sadece Yusuf ve Neeja icin hazirlanan ozel Android mesajlasma, otomatik Turkce-Tayca ceviri, sesli mesaj, goruntulu gorusme, guvenlik konumu ve kalici oturum uygulamasidir.
 
-## Gerekli hesaplar
+- Android paket adi: `com.sevgilimchat.android`
+- Uygulama adi: `Sevgilim Chat`
+- Production backend URL: `https://sevgilim-chat.onrender.com`
+- Oda kodu: backend environment icinde `PRIVATE_ROOM_CODE` olarak tutulur
 
-- Render veya Railway
-- PostgreSQL
-- OpenAI API key
-- Expo/EAS hesabi
-- Android telefon veya emulator
+Bu projede acik kayit, admin paneli, reklam, demo kullanici veya ucuncu kullanici sistemi yoktur.
 
-## Backend kurulumu
+## Kurulum
 
 ```bash
 cd backend
@@ -19,31 +18,61 @@ npm run check
 npm run dev
 ```
 
-Canli ortamda start komutu:
+```bash
+cd android
+npm install
+npm run check
+npx expo prebuild --platform android
+```
+
+Windows'ta `node` PATH sorunu olursa `C:\Program Files\nodejs` PATH'in basina alinmalidir.
+
+## Backend
+
+Canli ortamda:
 
 ```bash
+cd backend
 npm run start
 ```
 
-## PostgreSQL baglantisi
+Health kontrolu:
 
-`DATABASE_URL` sadece backend environment variable olarak girilir. Android icine database bilgisi yazilmaz.
-
-## OpenAI API key nereye yazilir
-
-`OPENAI_API_KEY` sadece backend deploy panelinde veya lokal backend `.env` dosyasinda tutulur. Bu repoda `.env` yoktur; sadece `backend/.env.example` vardir.
-
-## Android backend URL nasil degistirilir
-
-Tek dosya:
-
-```text
-android/src/config/backend.ts
+```bash
+curl https://sevgilim-chat.onrender.com/health
 ```
 
-`BACKEND_URL` canli backend adresiyle degistirilir. Android icinde API key, JWT secret veya database bilgisi yoktur.
+Gerekli environment variable isimleri:
 
-## APK nasil alinir
+```text
+NODE_ENV
+PORT
+DATABASE_URL
+JWT_SECRET
+MESSAGE_ENCRYPTION_KEY
+PRIVATE_ROOM_CODE
+USER_A_USERNAME
+USER_A_DISPLAY_NAME
+USER_A_PASSWORD
+USER_A_LANG
+USER_B_USERNAME
+USER_B_DISPLAY_NAME
+USER_B_PASSWORD
+USER_B_LANG
+TRANSLATION_PROVIDER
+OPENAI_API_KEY
+PUBLIC_BASE_URL
+CORS_ORIGIN
+TURN_URL
+TURN_USERNAME
+TURN_PASSWORD
+```
+
+Degerler repoya, Android icine veya APK'ye yazilmaz. Sadece backend environment tarafinda tutulur.
+
+## Android APK Build
+
+Expo Go, WebRTC icin yeterli degildir. APK icin EAS/custom build gerekir.
 
 ```bash
 cd android
@@ -53,56 +82,107 @@ npx expo prebuild --platform android
 eas build -p android --profile preview
 ```
 
-Not: Komutta `eas build -p android --profile preview` kullanilir. WebRTC nedeniyle Expo Go yeterli degildir; EAS/custom build gerekir.
-
-## Render/Railway deploy
-
-Backend klasoru Node.js servisi olarak deploy edilir. Environment variable listesi `docs/07-RENDER-ENV-LISTESI.md` icindedir. Deploy sonrasi `GET /health` kontrol edilir.
-
-## TURN server neden gerekebilir
-
-WebRTC bazi mobil aglarda dogrudan baglanamayabilir. Goruntulu gorusme baglanmazsa TURN server bilgileri backend env olarak eklenir.
-
-## Gizli bilgiler neden Android icine konmaz
-
-APK incelenebilir. Bu yuzden `OPENAI_API_KEY`, `DATABASE_URL`, `JWT_SECRET`, `MESSAGE_ENCRYPTION_KEY` ve kullanici sifreleri sadece backend ortaminda tutulur.
-
-## Son calistirma sirasi
-
-1. PostgreSQL olustur.
-2. Backend environment variable degerlerini gir.
-3. Backend deploy et.
-4. `/health` test et.
-5. Android `BACKEND_URL` degerini canli URL yap.
-6. `npm run check` calistir.
-7. `eas build -p android --profile preview` ile APK al.
-8. Yusuf ve Neeja ile test et.
-
-## Yardimci scriptler
-
-Backend URL guncellemek icin:
+Production AAB icin:
 
 ```bash
-node scripts/set-backend-url.js https://senin-backend-url.onrender.com
+cd android
+eas build -p android --profile production
 ```
 
-Secret onerileri uretmek icin:
+APK/AAB, `.env`, log dosyalari, `node_modules`, build ciktisi ve lokal giris bilgileri GitHub'a eklenmez.
 
-```bash
-node scripts/generate-secrets.js
-```
+## Mesajlasma ve Ceviri
 
-Bu scriptler `.env` dosyasi olusturmaz ve Android icine gizli bilgi yazmaz.
+Mesaj gonderilince Android once optimistic UI ile mesaji ekranda gosterir. Backend mesaji hemen kaydeder ve socket ile yayinlar. Ceviri OpenAI ile sadece backend tarafinda calisir; ceviri tamamlaninca ayni mesaj `message:updated` eventi ile guncellenir.
 
-## Render Docker Deploy
+- Yusuf dili: `tr`
+- Neeja dili: `th`
+- Yusuf mesajinda `originalText` Turkce, `translatedText` Tayca olur.
+- Neeja mesajinda `originalText` Tayca, `translatedText` Turkce olur.
+- Gonderen kendi orijinal metnini ana satirda gorur.
+- Alici kendi anlayacagi ceviriyi ana satirda gorur.
+- Ceviri basarisiz olursa mesaj kaybolmaz; `translatedText` sade bir hata metni ile guncellenir.
 
-Render New Web Service ekraninda Language olarak sadece Docker gorunuyorsa su ayarlari kullan:
+Mesaj metni backend tarafindan ceviri icin islenir. Bu nedenle ceviri acikken teknik anlamda gercek uctan uca sifreleme saglanamaz. Mesajlar HTTPS uzerinden tasinir ve veritabaninda `MESSAGE_ENCRYPTION_KEY` ile sifreli saklanir.
+
+## Socket ve Durumlar
+
+Socket.IO WebSocket'i oncelikli kullanir, polling sadece geri dusus olarak kalir. Mesaj durumlari:
+
+- `sending`
+- `sent`
+- `delivered`
+- `read`
+- `failed`
+
+Baglanti koparsa uygulama yeniden baglanmayi dener ve kullaniciya sade durum mesaji gosterir. Render Free plan uyku gecikmesi varsa ilk istek birkac saniye surebilir.
+
+## Goruntulu Gorusme
+
+WebRTC eventleri backend ve Android tarafinda ayni tutulur:
 
 ```text
-Language: Docker
-Root Directory: backend
-Dockerfile Path: ./Dockerfile
-Instance Type: Free
+call:start
+call:incoming
+call:accept
+call:reject
+call:end
+webrtc:offer
+webrtc:answer
+webrtc:ice-candidate
 ```
 
-Environment Variables yine Render panelinden girilir. Gercek API key, DATABASE_URL, JWT_SECRET, MESSAGE_ENCRYPTION_KEY ve sifreler Docker image icine yazilmaz.
+Gorusmede kucuk self-preview, kamera ac/kapat, mikrofon ac/kapat, kamera cevirme, gorusmeyi kucultme, gorusmeyi bitirme ve kalite modu kontrolleri vardir.
+
+Kalite modlari:
+
+- Dusuk veri: 480x360, 15 fps, dusuk bitrate
+- Dengeli: 640x480, 20 fps, orta bitrate
+- Daha iyi goruntu: 720 genislik, 24 fps, kontrollu yuksek bitrate
+
+Bazi Turkiye-Tayland mobil aglarinda STUN yeterli olmayabilir. Bu durumda backend environment tarafina TURN bilgileri eklenmelidir: `TURN_URL`, `TURN_USERNAME`, `TURN_PASSWORD`.
+
+`Yumusak goruntu` modu ilk surumde hafif self-preview yumusatma hissi verir. Gercek native beauty filter icin ek native kamera/filter modulu gerekir.
+
+## Sesli Mesaj
+
+Sesli mesaj upload endpoint'i JWT ile korunur. Backend ses dosyasi boyutunu sinirlar ve sadece ses MIME/uzantilarini kabul eder. Buyuk dosyada kullaniciya sade hata gosterilir.
+
+## Guvenlik Konumu ve Acik Riza
+
+Konum ozelligi acik riza olmadan calismaz. Ilk giristen sonra kullaniciya Guvenlik Konumu Onayi gosterilir.
+
+- Kabul edilirse Android konum izni istenir.
+- Uygulama acikken yaklasik 60 saniyelik dengeli konum guncellemesi yapilir.
+- Arka planda Android izin verirse yaklasik 5-10 dakikalik araliklarla calisir.
+- Kullanici ayarlardan konum paylasimini kapatabilir.
+- Konum koordinatlari loglarda acik yazilmaz.
+- Veritabani uzun sureli takip icin tutulmaz; konum kayitlari 24 saatlik TTL ile sinirlanir.
+
+Android arka plan kurallari, pil optimizasyonu veya uygulamanin zorla kapatilmasi konumu ve socket baglantisini durdurabilir.
+
+## Bildirimler
+
+Mevcut ilk surum Expo push token altyapisina hazirdir. Hassas mesaj ve konum bilgileri bildirim metninde acik yazilmaz. Firebase Cloud Messaging daha ileri ve daha guclu bildirim senaryolari icin sonraki gelistirme olarak ayrilmistir.
+
+## Gizlilik ve Guvenlik
+
+- Android icinde OpenAI API key, database bilgisi, JWT secret, mesaj sifreleme anahtari veya kullanici sifresi tutulmaz.
+- Backend loglarinda secret, mesaj icerigi ve konum koordinati yazilmamalidir.
+- `backend/.env`, `LOCAL-GIRIS-BILGILERI.txt`, `node_modules`, loglar, APK/AAB ve build ciktisi GitHub'a gitmez.
+- Kullanici sistemi sadece Yusuf ve Neeja ile sinirlidir.
+- Upload, mesaj, konum ve socket islemleri JWT korumasi ile calisir.
+
+## Bilinen Sinirlamalar
+
+- Render Free plan uyursa ilk baglanti gecikebilir.
+- Mobil ag/NAT kosullarina gore TURN sunucusu gerekebilir.
+- Uygulama zorla kapatilirsa Android arka plan konumu ve socket baglantisi durdurabilir.
+- Gercek native beauty filter ayrica native modul gerektirir.
+
+## Sonraki Gelistirmeler
+
+- Firebase push notification
+- TURN sunucusu
+- Native beauty filter
+- Daha gelismis medya sikistirma

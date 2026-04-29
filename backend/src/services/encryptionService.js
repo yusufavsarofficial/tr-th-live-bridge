@@ -43,16 +43,27 @@ function decryptValue(value) {
 function serializeMessage(row) {
   return {
     id: row.id,
+    sender: row.sender_username,
+    receiver: row.receiver_username,
     sender_username: row.sender_username,
+    receiver_username: row.receiver_username,
     sender_display_name: row.sender_display_name,
     sender_lang: row.sender_lang,
     target_lang: row.target_lang,
+    senderLang: row.sender_lang,
+    targetLang: row.target_lang,
+    originalText: decryptValue(row.original_text_encrypted || row.original_text || ""),
+    translatedText: decryptValue(row.translated_text_encrypted || row.translated_text || ""),
     original_text: decryptValue(row.original_text_encrypted || row.original_text || ""),
     translated_text: decryptValue(row.translated_text_encrypted || row.translated_text || ""),
     audio_url: decryptValue(row.audio_url_encrypted || row.audio_url || "") || null,
     message_type: row.message_type,
+    status: row.status || "sent",
     read_by: row.read_by || [],
-    created_at: row.created_at
+    created_at: row.created_at,
+    updated_at: row.updated_at || row.created_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at || row.created_at
   };
 }
 

@@ -10,6 +10,7 @@ const { initDb } = require("./db/init");
 const { healthRouter } = require("./routes/health");
 const { authRouter } = require("./routes/auth");
 const { callsRouter } = require("./routes/calls");
+const { locationsRouter } = require("./routes/locations");
 const { messagesRouter } = require("./routes/messages");
 const { pushRouter } = require("./routes/push");
 const { uploadsRouter, uploadDir } = require("./routes/uploads");
@@ -29,7 +30,8 @@ const io = new Server(server, {
   cors: { ...corsOptions, methods: ["GET", "POST"] },
   maxHttpBufferSize: 1_000_000,
   pingTimeout: 30000,
-  pingInterval: 25000
+  pingInterval: 25000,
+  transports: ["websocket", "polling"]
 });
 
 function streamApk(res, url) {
@@ -81,6 +83,7 @@ app.get("/api/rtc-config", (req, res) => {
 app.use(healthRouter);
 app.use(authRouter);
 app.use(callsRouter);
+app.use(locationsRouter);
 app.use(messagesRouter);
 app.use(pushRouter);
 app.use(uploadsRouter);
@@ -92,6 +95,6 @@ async function start() {
 }
 
 start().catch((error) => {
-  console.error("Backend failed to start", error);
+  console.error("Backend failed to start", error.message || "START_FAILED");
   process.exit(1);
 });

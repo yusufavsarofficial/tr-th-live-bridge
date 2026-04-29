@@ -14,9 +14,13 @@ export function connectSocket(token: string) {
   currentToken = token;
   socket = io(BACKEND_URL, {
     auth: { token },
+    transports: ["websocket", "polling"],
+    upgrade: true,
     reconnection: true,
     reconnectionAttempts: Infinity,
-    timeout: 20000
+    reconnectionDelay: 800,
+    reconnectionDelayMax: 6000,
+    timeout: 12000
   });
   return socket;
 }
