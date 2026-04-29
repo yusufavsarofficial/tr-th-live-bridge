@@ -9,6 +9,9 @@ on:
       - "android/**"
       - ".github/workflows/android-release-apk.yml"
 
+permissions:
+  contents: write
+
 jobs:
   build_apk:
     name: Build SevgilimChat-release.apk
@@ -63,3 +66,14 @@ jobs:
             android/release/SevgilimChat-release.apk
             android/release/SevgilimChat-release.apk.sha256
           if-no-files-found: error
+
+      - name: Publish APK release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-latest
+          name: Sevgilim Chat Android APK
+          body: Latest installable Android APK for Sevgilim Chat.
+          make_latest: true
+          files: |
+            android/release/SevgilimChat-release.apk
+            android/release/SevgilimChat-release.apk.sha256

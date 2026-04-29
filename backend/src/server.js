@@ -17,6 +17,7 @@ const { pushRouter } = require("./routes/push");
 const { uploadsRouter, uploadDir } = require("./routes/uploads");
 const { registerSockets } = require("./sockets");
 
+const defaultApkDownloadUrl = "https://github.com/yusufavsarofficial/sevgilim-chat/releases/latest/download/SevgilimChat-release.apk";
 const app = express();
 const server = http.createServer(app);
 const allowedOrigins = env.corsOrigin.split(",").map((origin) => origin.trim()).filter(Boolean);
@@ -73,8 +74,7 @@ app.get("/", (req, res) => res.json({
   health: "/health"
 }));
 app.get(["/download/apk", "/apk/sevgilim-chat.apk"], (req, res) => {
-  if (!env.apkDownloadUrl) return res.status(503).json({ error: "APK_DOWNLOAD_URL_NOT_CONFIGURED" });
-  return streamApk(res, env.apkDownloadUrl);
+  return streamApk(res, env.apkDownloadUrl || defaultApkDownloadUrl);
 });
 app.get("/api/rtc-config", authMiddleware, (req, res) => {
   const iceServers = [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:global.stun.twilio.com:3478" }];

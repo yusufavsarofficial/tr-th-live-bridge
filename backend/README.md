@@ -61,4 +61,4 @@ Instance Type: Free
 
 `.env` dosyasi image icine kopyalanmaz. Tum secret degerler Render Environment panelinden girilir.
 
-APK indirme endpoint'i `APK_DOWNLOAD_URL` environment degeri verilirse `/download/apk` uzerinden APK dosyasini stream eder. APK dosyasi repoya veya Docker image icine eklenmez.
+APK indirme endpoint'i `/download/apk` uzerinden guncel GitHub Release APK dosyasini stream eder. `APK_DOWNLOAD_URL` environment degeri verilirse bu URL kullanilir. APK dosyasi repoya veya Docker image icine eklenmez.
