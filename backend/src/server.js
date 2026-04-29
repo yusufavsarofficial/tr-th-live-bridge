@@ -16,12 +16,28 @@ const { registerSockets } = require("./sockets");
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: env.corsOrigin, methods: ["GET", "POST"] } });
+const allowedOrigins = env.corsOrigin.split(",").map((origin) => origin.trim()).filter(Boolean);
+const corsOptions = {
+  origin(origin, callback) {
+    if (!origin || env.corsOrigin === "*" || allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error("CORS_NOT_ALLOWED"));
+  }
+};
+const io = new Server(server, {
+  cors: { ...corsOptions, methods: ["GET", "POST"] },
+  maxHttpBufferSize: 1_000_000,
+  pingTimeout: 30000,
+  pingInterval: 25000
+});
 
-app.use(helmet());
-app.use(cors({ origin: env.corsOrigin }));
+app.disable("x-powered-by");
+app.set("trust proxy", 1);
+app.use(helmet({
+  hsts: env.nodeEnv === "production" ? { maxAge: 31536000, includeSubDomains: true } : false
+}));
+app.use(cors(corsOptions));
 app.use(express.json({ limit: "1mb" }));
-app.use(rateLimit({ windowMs: 60 * 1000, max: 120 }));
+app.use(rateLimit({ windowMs: 60 * 1000, max: 120, standardHeaders: true, legacyHeaders: false }));
 app.use("/uploads", express.static(uploadDir, { dotfiles: "deny", immutable: true, maxAge: "1h" }));
 app.get("/api/rtc-config", (req, res) => {
   const iceServers = [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:global.stun.twilio.com:3478" }];

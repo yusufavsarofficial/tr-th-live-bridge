@@ -1,5 +1,6 @@
 ﻿const { verifyToken } = require("../middleware/auth");
 const { pool } = require("../db/pool");
+const { encryptValue, serializeMessage } = require("../services/encryptionService");
 const { translateMessage } = require("../services/translationService");
 const { sendPushToPartner } = require("../services/pushService");
 const { SOCKET_EVENTS } = require("./events");
@@ -7,6 +8,21 @@ const { SOCKET_EVENTS } = require("./events");
 const onlineUsers = new Map();
 const MAX_TEXT_LENGTH = 4000;
 const MAX_CALL_ID_LENGTH = 120;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const CALL_ID_RE = /^[a-zA-Z0-9._:-]{1,120}$/;
+
+function socketRateLimit(socket, key, limit, windowMs) {
+  socket.data.rateLimits ||= {};
+  const now = Date.now();
+  const bucket = socket.data.rateLimits[key] || { count: 0, resetAt: now + windowMs };
+  if (now > bucket.resetAt) {
+    bucket.count = 0;
+    bucket.resetAt = now + windowMs;
+  }
+  bucket.count += 1;
+  socket.data.rateLimits[key] = bucket;
+  return bucket.count <= limit;
+}
 
 function emitPresence(io) {
   io.emit(SOCKET_EVENTS.PRESENCE_UPDATE, { online: Array.from(onlineUsers.keys()) });
@@ -33,6 +49,10 @@ function registerSockets(io) {
 
     socket.on(SOCKET_EVENTS.MESSAGE_SEND, async (payload = {}, callback) => {
       try {
+        if (!socketRateLimit(socket, "message", 40, 60 * 1000)) {
+          if (callback) callback({ ok: false, error: "RATE_LIMITED" });
+          return;
+        }
         const messageType = payload.messageType === "audio" ? "audio" : "text";
         const originalText = String(payload.text || "").slice(0, MAX_TEXT_LENGTH);
         if (messageType === "text" && !originalText.trim()) {
@@ -56,16 +76,30 @@ function registerSockets(io) {
 
         const result = await pool.query(
           `INSERT INTO messages
-            (room_code, sender_username, sender_display_name, sender_lang, target_lang, original_text, translated_text, audio_url, message_type)
+            (room_code, sender_username, sender_display_name, sender_lang, target_lang,
+             original_text_encrypted, translated_text_encrypted, audio_url_encrypted, message_type)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-           RETURNING id, sender_username, sender_display_name, sender_lang, target_lang, original_text, translated_text, audio_url, message_type, read_by, created_at`,
-          ["private-room", user.username, user.displayName, user.lang, targetLang, originalText, translatedText, payload.audioUrl || null, messageType]
+           RETURNING id, sender_username, sender_display_name, sender_lang, target_lang,
+             original_text, translated_text, audio_url,
+             original_text_encrypted, translated_text_encrypted, audio_url_encrypted,
+             message_type, read_by, created_at`,
+          [
+            "private-room",
+            user.username,
+            user.displayName,
+            user.lang,
+            targetLang,
+            encryptValue(originalText),
+            encryptValue(translatedText),
+            payload.audioUrl ? encryptValue(payload.audioUrl) : null,
+            messageType
+          ]
         );
-        const message = result.rows[0];
+        const message = serializeMessage(result.rows[0]);
         io.to("private-room").emit(SOCKET_EVENTS.MESSAGE_NEW, message);
         sendPushToPartner(user.username, {
           title: user.displayName || user.username,
-          body: messageType === "audio" ? "Sesli mesaj" : originalText.slice(0, 120),
+          body: messageType === "audio" ? "Sesli mesaj" : "Yeni mesaj",
           data: { type: "message", messageId: message.id }
         });
         if (callback) callback({ ok: true, message });
@@ -76,15 +110,20 @@ function registerSockets(io) {
       }
     });
 
-    socket.on(SOCKET_EVENTS.TYPING_START, () => socket.to("private-room").emit(SOCKET_EVENTS.TYPING_START, { username: user.username }));
-    socket.on(SOCKET_EVENTS.TYPING_STOP, () => socket.to("private-room").emit(SOCKET_EVENTS.TYPING_STOP, { username: user.username }));
+    socket.on(SOCKET_EVENTS.TYPING_START, () => {
+      if (socketRateLimit(socket, "typing", 120, 60 * 1000)) socket.to("private-room").emit(SOCKET_EVENTS.TYPING_START, { username: user.username });
+    });
+    socket.on(SOCKET_EVENTS.TYPING_STOP, () => {
+      if (socketRateLimit(socket, "typing", 120, 60 * 1000)) socket.to("private-room").emit(SOCKET_EVENTS.TYPING_STOP, { username: user.username });
+    });
     socket.on(SOCKET_EVENTS.MESSAGE_READ, async ({ messageId }) => {
+      if (!UUID_RE.test(String(messageId || ""))) return;
       await pool.query("UPDATE messages SET read_by = array_append(read_by, $1) WHERE id = $2 AND NOT ($1 = ANY(read_by))", [user.username, messageId]);
       socket.to("private-room").emit(SOCKET_EVENTS.MESSAGE_READ_RECEIPT, { messageId, readBy: user.username });
     });
     socket.on(SOCKET_EVENTS.MESSAGE_DELETE, async ({ messageId } = {}, callback) => {
       try {
-        if (user.username !== "Yusuf") {
+        if (user.username !== "Yusuf" || !UUID_RE.test(String(messageId || ""))) {
           if (callback) callback({ ok: false, error: "DELETE_NOT_ALLOWED" });
           return;
         }
@@ -100,12 +139,13 @@ function registerSockets(io) {
       }
     });
 
-    const validCallId = (payload = {}) => typeof payload.callId === "string" && payload.callId.length > 0 && payload.callId.length <= MAX_CALL_ID_LENGTH;
+    const validCallId = (payload = {}) => typeof payload.callId === "string" && CALL_ID_RE.test(payload.callId) && payload.callId.length <= MAX_CALL_ID_LENGTH;
     const forwardCall = (event, outgoingEvent) => (payload = {}) => {
       if (!validCallId(payload)) return socket.emit(SOCKET_EVENTS.ERROR, { error: "INVALID_CALL_ID", recoverable: true });
       socket.to("private-room").emit(outgoingEvent, { ...payload, from: user.username });
     };
     socket.on(SOCKET_EVENTS.CALL_START, async (payload = {}) => {
+      if (!socketRateLimit(socket, "call", 12, 60 * 1000)) return socket.emit(SOCKET_EVENTS.ERROR, { error: "RATE_LIMITED", recoverable: true });
       if (!validCallId(payload)) return socket.emit(SOCKET_EVENTS.ERROR, { error: "INVALID_CALL_ID", recoverable: true });
       await pool.query(`
         INSERT INTO call_events (room_code, call_id, caller_username, status)

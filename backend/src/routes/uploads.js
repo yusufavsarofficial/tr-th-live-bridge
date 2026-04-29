@@ -1,5 +1,6 @@
 ﻿const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const express = require("express");
 const multer = require("multer");
 const { authMiddleware } = require("../middleware/auth");
@@ -14,7 +15,7 @@ const storage = multer.diskStorage({
   filename: (req, file, cb) => {
     const incomingExt = path.extname(file.originalname || ".m4a").toLowerCase();
     const safeExt = allowedExtensions.has(incomingExt) ? incomingExt : ".m4a";
-    cb(null, `${Date.now()}-${req.user.username}${safeExt}`);
+    cb(null, `${crypto.randomUUID()}${safeExt}`);
   }
 });
 
@@ -48,6 +49,11 @@ router.post("/api/uploads/audio", authMiddleware, upload.single("audio"), async 
     translatedText: speech.translatedText || "",
     warning: speech.warning
   });
+});
+
+router.use((error, req, res, next) => {
+  if (error) return res.status(400).json({ error: error.message || "UPLOAD_FAILED" });
+  return next();
 });
 
 module.exports = { uploadsRouter: router, uploadDir };

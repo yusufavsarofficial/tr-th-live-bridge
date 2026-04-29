@@ -1,5 +1,7 @@
 ﻿const { pool } = require("./pool");
 
+const { encryptValue } = require("../services/encryptionService");
+
 async function initDb() {
   await pool.query("CREATE EXTENSION IF NOT EXISTS pgcrypto;");
   await pool.query(`
@@ -18,6 +20,38 @@ async function initDb() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+  await pool.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS original_text_encrypted TEXT;");
+  await pool.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS translated_text_encrypted TEXT;");
+  await pool.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS audio_url_encrypted TEXT;");
+  await pool.query("CREATE INDEX IF NOT EXISTS idx_messages_room_created_at ON messages (room_code, created_at DESC);");
+  await pool.query("CREATE INDEX IF NOT EXISTS idx_messages_sender_created_at ON messages (sender_username, created_at DESC);");
+
+  const plaintextRows = await pool.query(`
+    SELECT id, original_text, translated_text, audio_url
+    FROM messages
+    WHERE (original_text IS NOT NULL AND original_text_encrypted IS NULL)
+       OR (translated_text IS NOT NULL AND translated_text_encrypted IS NULL)
+       OR (audio_url IS NOT NULL AND audio_url_encrypted IS NULL)
+    LIMIT 5000
+  `);
+
+  for (const row of plaintextRows.rows) {
+    await pool.query(`
+      UPDATE messages
+      SET original_text_encrypted = COALESCE(original_text_encrypted, $2),
+          translated_text_encrypted = COALESCE(translated_text_encrypted, $3),
+          audio_url_encrypted = COALESCE(audio_url_encrypted, $4),
+          original_text = NULL,
+          translated_text = NULL,
+          audio_url = NULL
+      WHERE id = $1
+    `, [
+      row.id,
+      row.original_text === null ? null : encryptValue(row.original_text),
+      row.translated_text === null ? null : encryptValue(row.translated_text),
+      row.audio_url === null ? null : encryptValue(row.audio_url)
+    ]);
+  }
   await pool.query(`
     CREATE TABLE IF NOT EXISTS call_events (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -30,6 +64,7 @@ async function initDb() {
       ended_at TIMESTAMPTZ
     );
   `);
+  await pool.query("CREATE INDEX IF NOT EXISTS idx_call_events_pending ON call_events (room_code, status, created_at DESC);");
   await pool.query(`
     CREATE TABLE IF NOT EXISTS push_tokens (
       username TEXT PRIMARY KEY,

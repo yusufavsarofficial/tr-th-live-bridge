@@ -8,6 +8,14 @@ function required(name) {
   return value;
 }
 
+function requireStrongSecret(name, minimumLength = 32) {
+  const value = required(name);
+  if (value.includes("CHANGE_ME") || value.length < minimumLength) {
+    throw new Error(`${name} must be a strong production secret.`);
+  }
+  return value;
+}
+
 function getUsers() {
   return [
     {
@@ -29,8 +37,8 @@ const env = {
   nodeEnv: process.env.NODE_ENV || "development",
   port: Number(process.env.PORT || 3000),
   databaseUrl: required("DATABASE_URL"),
-  jwtSecret: required("JWT_SECRET"),
-  messageEncryptionKey: required("MESSAGE_ENCRYPTION_KEY"),
+  jwtSecret: requireStrongSecret("JWT_SECRET", 48),
+  messageEncryptionKey: requireStrongSecret("MESSAGE_ENCRYPTION_KEY", 32),
   privateRoomCode: required("PRIVATE_ROOM_CODE"),
   corsOrigin: process.env.CORS_ORIGIN || "*",
   publicBaseUrl: process.env.PUBLIC_BASE_URL || "",

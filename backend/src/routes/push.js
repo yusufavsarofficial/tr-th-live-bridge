@@ -6,7 +6,7 @@ const router = express.Router();
 
 router.post("/api/push-token", authMiddleware, async (req, res) => {
   const token = String(req.body?.token || "");
-  if (!token.startsWith("ExponentPushToken[")) return res.status(400).json({ error: "INVALID_PUSH_TOKEN" });
+  if (!token.startsWith("ExponentPushToken[") || token.length > 256) return res.status(400).json({ error: "INVALID_PUSH_TOKEN" });
 
   await pool.query(`
     INSERT INTO push_tokens (username, token, updated_at)
