@@ -14,6 +14,7 @@ const { pushRouter } = require("./routes/push");
 const { uploadsRouter, uploadDir } = require("./routes/uploads");
 const { registerSockets } = require("./sockets");
 
+const apkDownloadUrl = "https://expo.dev/artifacts/eas/x2d23kCJK2ZtDhvTDBhjLG.apk";
 const app = express();
 const server = http.createServer(app);
 const allowedOrigins = env.corsOrigin.split(",").map((origin) => origin.trim()).filter(Boolean);
@@ -39,6 +40,13 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: "1mb" }));
 app.use(rateLimit({ windowMs: 60 * 1000, max: 120, standardHeaders: true, legacyHeaders: false }));
 app.use("/uploads", express.static(uploadDir, { dotfiles: "deny", immutable: true, maxAge: "1h" }));
+app.get("/", (req, res) => res.json({
+  ok: true,
+  service: "sevgilim-chat-backend",
+  apk: "/apk/sevgilim-chat.apk",
+  health: "/health"
+}));
+app.get("/apk/sevgilim-chat.apk", (req, res) => res.redirect(302, apkDownloadUrl));
 app.get("/api/rtc-config", (req, res) => {
   const iceServers = [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:global.stun.twilio.com:3478" }];
   if (env.turn.url && env.turn.username && env.turn.password) {
