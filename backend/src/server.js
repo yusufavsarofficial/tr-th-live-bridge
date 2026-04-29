@@ -1,4 +1,5 @@
 ﻿const http = require("http");
+const https = require("https");
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
@@ -31,6 +32,29 @@ const io = new Server(server, {
   pingInterval: 25000
 });
 
+function streamApk(res, url) {
+  const request = https.get(url, (upstreamRes) => {
+    if (upstreamRes.statusCode && upstreamRes.statusCode >= 300 && upstreamRes.statusCode < 400 && upstreamRes.headers.location) {
+      upstreamRes.resume();
+      streamApk(res, upstreamRes.headers.location);
+      return;
+    }
+    if (upstreamRes.statusCode !== 200) {
+      res.status(502).json({ error: "APK_DOWNLOAD_FAILED" });
+      upstreamRes.resume();
+      return;
+    }
+    res.setHeader("Content-Type", "application/vnd.android.package-archive");
+    res.setHeader("Content-Disposition", "attachment; filename=\"sevgilim-chat.apk\"");
+    res.setHeader("Cache-Control", "public, max-age=300");
+    if (upstreamRes.headers["content-length"]) res.setHeader("Content-Length", upstreamRes.headers["content-length"]);
+    upstreamRes.pipe(res);
+  });
+  request.on("error", () => {
+    if (!res.headersSent) res.status(502).json({ error: "APK_DOWNLOAD_FAILED" });
+  });
+}
+
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
 app.use(helmet({
@@ -46,7 +70,7 @@ app.get("/", (req, res) => res.json({
   apk: "/apk/sevgilim-chat.apk",
   health: "/health"
 }));
-app.get("/apk/sevgilim-chat.apk", (req, res) => res.redirect(302, apkDownloadUrl));
+app.get("/apk/sevgilim-chat.apk", (req, res) => streamApk(res, apkDownloadUrl));
 app.get("/api/rtc-config", (req, res) => {
   const iceServers = [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:global.stun.twilio.com:3478" }];
   if (env.turn.url && env.turn.username && env.turn.password) {
