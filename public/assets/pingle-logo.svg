@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Pingle</title>
+  <desc id="desc">AYFSOFT Pingle chat and call app icon.</desc>
+  <defs>
+    <linearGradient id="bubble" x1="20" y1="18" x2="112" y2="112" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#25f59d" />
+      <stop offset=".46" stop-color="#12c7d9" />
+      <stop offset="1" stop-color="#3158ff" />
+    </linearGradient>
+    <linearGradient id="note" x1="70" y1="13" x2="108" y2="54" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff4ba" />
+      <stop offset="1" stop-color="#ffb35d" />
+    </linearGradient>
+    <filter id="softShadow" x="-18%" y="-16%" width="136%" height="142%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#000" flood-opacity=".34" />
+    </filter>
+  </defs>
+  <rect width="128" height="128" rx="30" fill="#071217" />
+  <path
+    filter="url(#softShadow)"
+    fill="url(#bubble)"
+    d="M24 24h70c13.3 0 24 10.7 24 24v31c0 13.3-10.7 24-24 24H61.5L32 120l6.4-17H24C10.7 103 0 92.3 0 79V48c0-13.3 10.7-24 24-24Z"
+  />
+  <path
+    fill="#071217"
+    d="M37 37h31.8C84 37 95 47.3 95 62.2 95 77 84 87 68.8 87H55v15H37V37Zm18 16.2v17.6h12.5c6.2 0 9.8-3.3 9.8-8.8 0-5.6-3.6-8.8-9.8-8.8H55Z"
+  />
+  <path
+    fill="url(#note)"
+    d="M86.2 12C96.6 12 105 20 105 30s-8.4 18-18.8 18H76.1L62 58l4.5-14.1A17.5 17.5 0 0 1 70.3 12h15.9Z"
+  />
+  <path fill="#071217" d="M77 26h19v5H77zM77 35h12.5v5H77z" opacity=".94" />
+  <path fill="#dfffe9" d="M25 44h8v8h-8zM25 59h8v8h-8zM25 74h8v8h-8z" opacity=".92" />
+</svg>
