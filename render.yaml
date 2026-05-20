@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: tr-th-live-bridge
+    env: node
+    plan: starter
+    buildCommand: npm ci
+    startCommand: npm start
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_TRANSLATE_MODEL
+        value: gpt-4.1-mini
+      - key: TRANSLATION_PROVIDER
+        value: openai-first
+      - key: TRANSLATE_TIMEOUT_MS
+        value: 7000
