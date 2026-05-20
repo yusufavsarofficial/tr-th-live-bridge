@@ -1,0 +1,26 @@
+<resources>
+    <string name="app_name">Pingle</string>
+    <string name="chats">แชต</string>
+    <string name="calls">การโทร</string>
+    <string name="status">สถานะ</string>
+    <string name="new_chat">แชตใหม่</string>
+    <string name="new_group">กลุ่มใหม่</string>
+    <string name="search">ค้นหา</string>
+    <string name="message">ข้อความ</string>
+    <string name="type_message">พิมพ์ข้อความ</string>
+    <string name="send">ส่ง</string>
+    <string name="online">ออนไลน์</string>
+    <string name="offline">ออฟไลน์</string>
+    <string name="typing">กำลังพิมพ์…</string>
+    <string name="settings">การตั้งค่า</string>
+    <string name="language">ภาษา</string>
+    <string name="turkish">ภาษาตุรกี</string>
+    <string name="thai">ภาษาไทย</string>
+    <string name="voice_call">โทรด้วยเสียง</string>
+    <string name="video_call">วิดีโอคอล</string>
+    <string name="camera">กล้อง</string>
+    <string name="microphone">ไมโครโฟน</string>
+    <string name="translate">แปลภาษา</string>
+    <string name="original">ต้นฉบับ</string>
+    <string name="translated">แปลแล้ว</string>
+</resources>
