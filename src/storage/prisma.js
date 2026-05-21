@@ -198,6 +198,8 @@ async function createPrismaStorage() {
         from: message.from,
         fromName: message.fromName,
         text: message.text || "",
+        translatedText: message.translatedText || null,
+        sourceLang: message.sourceLang || null,
         imageData: message.imageData || null,
         timestamp: BigInt(message.timestamp || Date.now()),
         status: message.status || "sent",

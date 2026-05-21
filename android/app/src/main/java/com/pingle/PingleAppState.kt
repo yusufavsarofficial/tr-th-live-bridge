@@ -19,6 +19,8 @@ data class ChatMessage(
     val from: String,
     val fromName: String,
     val text: String,
+    val translatedText: String?,
+    val sourceLang: String?,
     val imageData: String?,
     val timestamp: Long,
     val status: String,
@@ -258,13 +260,16 @@ private fun JSONObject.toChatMessage(myId: String): ChatMessage {
     val from = optString("from", "")
     val fromName = optString("fromName", "Unknown")
     val text = optString("text", "")
+    val translatedText = if (has("translatedText") && !isNull("translatedText")) optString("translatedText", "") else null
+    val sourceLang = if (has("sourceLang") && !isNull("sourceLang")) optString("sourceLang", "") else null
     val imageData = if (has("imageData") && !isNull("imageData")) optString("imageData", "") else null
     val timestamp = optLong("timestamp", System.currentTimeMillis())
     val status = optString("status", "sent")
     val pending = optBoolean("translationPending", false)
     return ChatMessage(
         id = id, conversationId = convId, from = from, fromName = fromName,
-        text = text, imageData = imageData, timestamp = timestamp, status = status,
+        text = text, translatedText = translatedText, sourceLang = sourceLang,
+        imageData = imageData, timestamp = timestamp, status = status,
         mine = from == myId, pending = pending,
     )
 }

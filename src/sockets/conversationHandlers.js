@@ -1,5 +1,11 @@
 const crypto = require("crypto");
 
+function detectLangFromPhone(phoneNumber) {
+  if (phoneNumber?.startsWith("+66")) return "th";
+  if (phoneNumber?.startsWith("+90")) return "tr";
+  return "en";
+}
+
 function createConversationHandlers(io, storage, fcmPushService) {
 
   function setup(socket) {
@@ -52,47 +58,76 @@ function createConversationHandlers(io, storage, fcmPushService) {
         if (!rawText && !imageData) return ack?.({ ok: false, error: "Message text or image required" });
         if (imageData && !imageData.startsWith("data:image/")) return ack?.({ ok: false, error: "Invalid image data" });
 
-        const message = {
-          id: crypto.randomUUID(),
-          conversationId: convId,
-          from: userId,
-          fromName: user?.displayName || user?.phoneNumber || "Unknown",
-          text: rawText.slice(0, 4000),
-          imageData: imageData || null,
-          timestamp: Date.now(),
-          status: "sent",
+        const senderLang = detectLangFromPhone(user?.phoneNumber || "");
+        const otherUserId = conv.participants.find(id => id !== userId);
+        const doTranslate = rawText && otherUserId;
+
+        const makeMessage = (translatedText) => {
+          const message = {
+            id: crypto.randomUUID(),
+            conversationId: convId,
+            from: userId,
+            fromName: user?.displayName || user?.phoneNumber || "Unknown",
+            text: rawText.slice(0, 4000),
+            translatedText: translatedText || null,
+            imageData: imageData || null,
+            timestamp: Date.now(),
+            status: "sent",
+            sourceLang: senderLang,
+          };
+
+          Promise.all([
+            storage.saveMessage(convId, message),
+            storage.updateConversation(convId, {
+              lastMessage: rawText.slice(0, 100) || (imageData ? "📷 Photo" : ""),
+              lastMessageSender: userId,
+              unreadCount: buildUnreadCount(conv, userId),
+            }),
+          ]).then(() => {
+            const room = `conv:${convId}`;
+            io.to(room).emit("conversation:message", message);
+            ack?.({ ok: true, id: message.id, timestamp: message.timestamp });
+
+            // Send FCM push notification to other participants
+            if (fcmPushService?.isReady()) {
+              if (otherUserId) {
+                storage.getFcmTokens(otherUserId).then(tokens => {
+                  if (tokens.length > 0) {
+                    const title = message.fromName || "Nova";
+                    const body = message.text?.slice(0, 200) || (message.imageData ? "📷 Photo" : "New message");
+                    fcmPushService.sendToMultiple(tokens, title, body, {
+                      conversationId: convId,
+                      messageId: message.id,
+                      senderId: userId,
+                    });
+                  }
+                });
+              }
+            }
+          });
         };
 
-        Promise.all([
-          storage.saveMessage(convId, message),
-          storage.updateConversation(convId, {
-            lastMessage: rawText.slice(0, 100) || (imageData ? "📷 Photo" : ""),
-            lastMessageSender: userId,
-            unreadCount: buildUnreadCount(conv, userId),
-          }),
-        ]).then(() => {
-          const room = `conv:${convId}`;
-          io.to(room).emit("conversation:message", message);
-          ack?.({ ok: true, id: message.id, timestamp: message.timestamp });
+        if (!doTranslate) {
+          return makeMessage(null);
+        }
 
-          // Send FCM push notification to other participants
-          if (fcmPushService?.isReady()) {
-            const otherUserId = conv.participants.find(id => id !== userId);
-            if (otherUserId) {
-              storage.getFcmTokens(otherUserId).then(tokens => {
-                if (tokens.length > 0) {
-                  const title = message.fromName || "Nova";
-                  const body = message.text?.slice(0, 200) || (message.imageData ? "📷 Photo" : "New message");
-                  fcmPushService.sendToMultiple(tokens, title, body, {
-                    conversationId: convId,
-                    messageId: message.id,
-                    senderId: userId,
-                  });
-                }
-              });
-            }
+        storage.findUserById(otherUserId).then(otherUser => {
+          const targetLang = detectLangFromPhone(otherUser?.phoneNumber || "");
+          if (senderLang === targetLang || !rawText) {
+            return makeMessage(null);
           }
-        });
+
+          try {
+            const { createTranslationService } = require("../services/translate");
+            const { config } = require("../config");
+            const translator = createTranslationService(config);
+            translator.safeTranslate(rawText, senderLang, targetLang).then(translated => {
+              makeMessage(translated || null);
+            }).catch(() => makeMessage(null));
+          } catch (e) {
+            makeMessage(null);
+          }
+        }).catch(() => makeMessage(null));
       });
     });
   }

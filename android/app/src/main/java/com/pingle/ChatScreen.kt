@@ -148,6 +148,7 @@ private fun EmptyConversation() {
 @Composable
 private fun MessageBubble(message: ChatMessage) {
     val isMine = message.mine
+    val displayText = if (isMine) message.text else (message.translatedText ?: message.text)
     val timeText = remember(message.timestamp) {
         val sdf = if (isToday(message.timestamp)) SimpleDateFormat("HH:mm", Locale.getDefault())
         else SimpleDateFormat("dd MMM HH:mm", Locale.getDefault())
@@ -205,7 +206,11 @@ private fun MessageBubble(message: ChatMessage) {
                     }
                 }
             } else {
-                Text(message.text, color = MaterialTheme.colorScheme.onBackground, fontSize = 15.sp, lineHeight = 20.sp)
+                Text(displayText, color = MaterialTheme.colorScheme.onBackground, fontSize = 15.sp, lineHeight = 20.sp)
+                if (!isMine && message.translatedText != null && message.text != message.translatedText) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(message.text, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), fontSize = 12.sp)
+                }
                 Spacer(Modifier.height(3.dp))
                 Row(modifier = Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) {
                     Text(timeText, color = if (isMine) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f), fontSize = 11.sp)
