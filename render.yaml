@@ -1,15 +1,34 @@
 services:
   - type: web
-    name: tr-th-live-bridge
-    env: node
+    name: nova-api
+    runtime: docker
     plan: starter
-    buildCommand: npm ci
-    startCommand: npm start
+    repo: https://github.com/your-org/nova
+    branch: main
     autoDeploy: true
+    healthCheckPath: /health
     envVars:
       - key: PORT
         value: 10000
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: nova-db
+          property: connectionString
+      - key: DB_PROVIDER
+        value: postgresql
+      - key: FCM_SERVICE_ACCOUNT_PATH
+        sync: false
       - key: OPENAI_API_KEY
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_PHONE_NUMBER
         sync: false
       - key: OPENAI_TRANSLATE_MODEL
         value: gpt-4.1-mini
@@ -17,3 +36,17 @@ services:
         value: openai-first
       - key: TRANSLATE_TIMEOUT_MS
         value: 7000
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: MAX_ATTACHMENT_BYTES
+        value: 4500000
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+
+databases:
+  - name: nova-db
+    plan: starter
+    databaseType: postgresql
+    ipAllowList: []

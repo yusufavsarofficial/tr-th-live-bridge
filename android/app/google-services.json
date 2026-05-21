@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "472139963513",
+    "project_id": "pingle-1f33d",
+    "storage_bucket": "pingle-1f33d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:472139963513:android:1c4ea9d6352348880948a8",
+        "android_client_info": {
+          "package_name": "com.pingle"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA5DV6JXjMCLqi-rN2SWQh-IHkRKUgfR0A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

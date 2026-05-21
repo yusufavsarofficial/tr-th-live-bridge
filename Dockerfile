@@ -1,0 +1,24 @@
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY . .
+
+# Switch to PostgreSQL schema and generate Prisma client
+ENV DB_PROVIDER=postgresql
+RUN node scripts/setup-prisma.js
+
+FROM node:20-alpine
+WORKDIR /app
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/server.js ./
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/prisma.config.ts ./
+
+EXPOSE ${PORT:-3000}
+
+# Run migrations and start
+CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]

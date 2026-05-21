@@ -1603,3 +1603,104 @@ svg {
 .info-modal strong {
   color: var(--green);
 }
+
+/* ─── Auth Screens ─────────────────────────────────── */
+.auth-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  background: var(--app-bg);
+  padding: 24px;
+}
+
+.auth-container {
+  width: 100%;
+  max-width: 380px;
+  text-align: center;
+}
+
+.auth-logo {
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--green);
+  margin: 0 0 8px;
+}
+
+.auth-subtitle {
+  color: var(--muted);
+  font-size: 15px;
+  margin: 0 0 32px;
+  line-height: 1.4;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.auth-input {
+  width: 100%;
+  padding: 14px 16px;
+  background: var(--panel-2);
+  border: none;
+  border-radius: 12px;
+  color: var(--text);
+  font-size: 16px;
+  outline: none;
+  transition: box-shadow 0.15s;
+}
+
+.auth-input:focus {
+  box-shadow: 0 0 0 2px var(--green);
+}
+
+.auth-input::placeholder {
+  color: var(--muted);
+}
+
+.otp-input {
+  font-size: 28px;
+  letter-spacing: 8px;
+  text-align: center;
+}
+
+.auth-btn {
+  height: 52px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.text-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 8px;
+}
+
+.text-btn:hover {
+  color: var(--text);
+}
+
+.auth-error {
+  color: var(--danger);
+  font-size: 14px;
+  margin: 0;
+}
+
+.auth-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--green-deep), var(--green));
+  color: #fff;
+  font-size: 34px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+}

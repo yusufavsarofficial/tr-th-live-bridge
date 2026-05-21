@@ -6,7 +6,7 @@ self.addEventListener("push", (event) => {
     payload = {};
   }
 
-  const title = payload.title || "Pingle";
+  const title = payload.title || "Nova";
   const options = {
     body: payload.body || "",
     tag: payload.tag || "pingle",
@@ -15,8 +15,8 @@ self.addEventListener("push", (event) => {
       type: payload.type || "message",
       timestamp: payload.timestamp || Date.now(),
     },
-    icon: "/assets/pingle-logo.svg",
-    badge: "/assets/pingle-logo.svg",
+    icon: "/assets/nova-logo.svg",
+    badge: "/assets/nova-logo.svg",
     vibrate: payload.type === "call" ? [180, 80, 180, 80, 180] : [120, 80, 120],
     requireInteraction: payload.type === "call",
   };

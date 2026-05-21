@@ -1,7 +1,58 @@
-const socket = io({
-  autoConnect: true,
-  transports: ["websocket", "polling"],
-});
+let socket = null;
+const AUTH_TOKEN_KEY = "pingle.auth.token";
+const AUTH_PHONE_KEY = "pingle.auth.phone";
+const AUTH_USER_ID_KEY = "pingle.auth.userId";
+const AUTH_DISPLAY_NAME_KEY = "pingle.auth.displayName";
+
+function getSavedToken() { return localStorage.getItem(AUTH_TOKEN_KEY) || ""; }
+function saveToken(token) { localStorage.setItem(AUTH_TOKEN_KEY, token); }
+function clearAuth() {
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(AUTH_PHONE_KEY);
+  localStorage.removeItem(AUTH_USER_ID_KEY);
+  localStorage.removeItem(AUTH_DISPLAY_NAME_KEY);
+}
+
+const authState = {
+  screen: getSavedToken() ? "chat" : "phone",
+  token: getSavedToken(),
+  phone: localStorage.getItem(AUTH_PHONE_KEY) || "",
+  userId: localStorage.getItem(AUTH_USER_ID_KEY) || "",
+  displayName: localStorage.getItem(AUTH_DISPLAY_NAME_KEY) || "",
+  isLoading: false,
+  error: "",
+};
+
+async function apiPost(path, body, token) {
+  const headers = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = "Bearer " + token;
+  try {
+    const r = await fetch(path, { method: "POST", headers, body: JSON.stringify(body) });
+    return await r.json();
+  } catch { return { ok: false, error: "Network error" }; }
+}
+
+async function apiGet(path, token) {
+  try {
+    const r = await fetch(path, { headers: { "Authorization": "Bearer " + token } });
+    return await r.json();
+  } catch { return { ok: false, error: "Network error" }; }
+}
+
+function connectSocket(token) {
+  if (socket) socket.close();
+  socket = io({
+    autoConnect: true,
+    transports: ["websocket", "polling"],
+    auth: { token },
+  });
+  return socket;
+}
+
+function initSocket() {
+  if (!authState.token) return;
+  connectSocket(authState.token);
+}
 
 const app = document.getElementById("app");
 const toast = document.getElementById("toast");
@@ -19,9 +70,9 @@ const IMAGE_QUALITY = 0.72;
 
 const i18n = {
   tr: {
-    appName: "Pingle",
-    pageTitle: "Pingle | Özel Sohbet",
-    metaDescription: "Pingle: özel iki kişilik mobil sohbet, otomatik Türkçe-Tayca çeviri ve arama deneyimi.",
+    appName: "Nova",
+    pageTitle: "Nova | Özel Sohbet",
+    metaDescription: "Nova: özel iki kişilik mobil sohbet, otomatik Türkçe-Tayca çeviri ve arama deneyimi.",
     ready: "Hazır",
     genericError: "hata",
     connecting: "Bağlanıyor...",
@@ -35,7 +86,7 @@ const i18n = {
     searchChat: "Sohbette ara",
     personalEncrypted: "Kişisel mesajlarınız uçtan uca şifrelidir",
     startProfile: "Sohbete başlamak için profilini bağla",
-    defaultRoom: "Pingle Oda",
+    defaultRoom: "Nova Odası",
     joinedReady: "Bağlanınca sohbet hazır",
     online: "çevrimiçi",
     roomOpen: "oda açık, davet bekliyor",
@@ -44,7 +95,7 @@ const i18n = {
     guestName: "Misafir",
     typing: "{name} yazıyor...",
     roomRealChat: "Odadaki gerçek konuşma burada tutulur.",
-    setupBanner: "Pingle hazır. Odaya bağlanınca mesaj, çeviri ve arama açılır.",
+    setupBanner: "Nova hazır. Odaya bağlanınca mesaj, çeviri ve arama açılır.",
     connectRoom: "Odaya bağlan",
     encryptedStrong: "Kişisel mesajlarınız uçtan uca şifrelidir",
     noStatusTitle: "Henüz durum yok",
@@ -70,13 +121,13 @@ const i18n = {
     save: "Kaydet",
     connect: "Bağlan",
     privacyTitle: "Gizlilik ve güven",
-    privacyP1: "Pingle, AYFSOFT & Yusuf Avşar tarafından geliştirilen, iki kişi arasında hızlı, sade ve güvenli iletişim kurmayı amaçlayan özel bir sohbet uygulamasıdır.",
+    privacyP1: "Nova, AYFSOFT & Yusuf Avşar tarafından geliştirilen, iki kişi arasında hızlı, sade ve güvenli iletişim kurmayı amaçlayan özel bir sohbet uygulamasıdır.",
     privacyP2: "Mesajlarınız, arama sinyalleriniz, profil bilgileriniz ve medya paylaşımlarınız yalnızca bu odaya katılan kişiler için anlamlı olacak şekilde tasarlanmıştır. Uygulama Türkçe ve Tayca konuşan kullanıcılar için otomatik çeviri, emoji, ses kaydı, fotoğraf, dosya ve görüntülü görüşmeyi tek mobil deneyimde toplar.",
-    privacyP3: "Hedefimiz tanıdık bir mesajlaşma deneyimine yakın, fakat Pingle ruhuyla daha hafif çalışan bir yapı kurmak: net görüntü, düşük internet tüketimi, hızlı bildirim, anlaşılır arayüz ve gereksiz kalabalıktan uzak bir konuşma alanı.",
+    privacyP3: "Hedefimiz tanıdık bir mesajlaşma deneyimine yakın, fakat Nova ruhuyla daha hafif çalışan bir yapı kurmak: net görüntü, düşük internet tüketimi, hızlı bildirim, anlaşılır arayüz ve gereksiz kalabalıktan uzak bir konuşma alanı.",
     understood: "Anladım",
     realPeople: "Gerçek kişiler",
     personCount: "{count} kişi",
-    activeRoom: "Pingle odasında aktif",
+    activeRoom: "Nova odasında aktif",
     noOtherPerson: "Odada başka kişi yok",
     otherWillAppear: "Karşı taraf bağlandığında burada görünür.",
     back: "Geri",
@@ -165,9 +216,9 @@ const i18n = {
     errorMessageLong: "Mesaj çok uzun. En fazla {max} karakter.",
   },
   th: {
-    appName: "Pingle",
-    pageTitle: "Pingle | แชตส่วนตัว",
-    metaDescription: "Pingle: แชตมือถือส่วนตัวสำหรับสองคน พร้อมแปลไทย-ตุรกีอัตโนมัติและการโทร",
+    appName: "Nova",
+    pageTitle: "Nova | แชตส่วนตัว",
+    metaDescription: "Nova: แชตมือถือส่วนตัวสำหรับสองคน พร้อมแปลไทย-ตุรกีอัตโนมัติและการโทร",
     ready: "พร้อม",
     genericError: "ผิดพลาด",
     connecting: "กำลังเชื่อมต่อ...",
@@ -181,7 +232,7 @@ const i18n = {
     searchChat: "ค้นหาในแชต",
     personalEncrypted: "ข้อความส่วนตัวของคุณเข้ารหัสตั้งแต่ต้นทางถึงปลายทาง",
     startProfile: "เชื่อมต่อโปรไฟล์เพื่อเริ่มแชต",
-    defaultRoom: "ห้อง Pingle",
+    defaultRoom: "ห้อง Nova",
     joinedReady: "เชื่อมต่อแล้วแชตจะพร้อม",
     online: "ออนไลน์",
     roomOpen: "ห้องเปิดอยู่ รอคำเชิญ",
@@ -190,7 +241,7 @@ const i18n = {
     guestName: "ผู้เยี่ยมชม",
     typing: "{name} กำลังพิมพ์...",
     roomRealChat: "บทสนทนาจริงของห้องจะแสดงที่นี่",
-    setupBanner: "Pingle พร้อมแล้ว เมื่อเข้าห้องแล้วจะใช้ข้อความ แปลภาษา และการโทรได้",
+    setupBanner: "Nova พร้อมแล้ว เมื่อเข้าห้องแล้วจะใช้ข้อความ แปลภาษา และการโทรได้",
     connectRoom: "เข้าห้อง",
     encryptedStrong: "ข้อความส่วนตัวของคุณเข้ารหัสตั้งแต่ต้นทางถึงปลายทาง",
     noStatusTitle: "ยังไม่มีสถานะ",
@@ -216,13 +267,13 @@ const i18n = {
     save: "บันทึก",
     connect: "เชื่อมต่อ",
     privacyTitle: "ความเป็นส่วนตัวและความปลอดภัย",
-    privacyP1: "Pingle เป็นแอปแชตส่วนตัวสำหรับสองคน พัฒนาโดย AYFSOFT & Yusuf Avşar เพื่อการสื่อสารที่รวดเร็ว เรียบง่าย และปลอดภัย",
+    privacyP1: "Nova เป็นแอปแชตส่วนตัวสำหรับสองคน พัฒนาโดย AYFSOFT & Yusuf Avşar เพื่อการสื่อสารที่รวดเร็ว เรียบง่าย และปลอดภัย",
     privacyP2: "ข้อความ สัญญาณการโทร โปรไฟล์ และสื่อของคุณถูกออกแบบให้มีความหมายเฉพาะกับคนที่อยู่ในห้องนี้ แอปรวมการแปลอัตโนมัติ อีโมจิ เสียง รูปภาพ ไฟล์ และวิดีโอคอลไว้ในประสบการณ์มือถือเดียว",
-    privacyP3: "เป้าหมายคือประสบการณ์แชตที่คุ้นเคย แต่เบากว่าในสไตล์ Pingle: ภาพชัด ใช้อินเทอร์เน็ตน้อย แจ้งเตือนเร็ว หน้าจอเข้าใจง่าย และพื้นที่คุยที่ไม่รก",
+    privacyP3: "เป้าหมายคือประสบการณ์แชตที่คุ้นเคย แต่เบากว่าในสไตล์ Nova: ภาพชัด ใช้อินเทอร์เน็ตน้อย แจ้งเตือนเร็ว หน้าจอเข้าใจง่าย และพื้นที่คุยที่ไม่รก",
     understood: "เข้าใจแล้ว",
     realPeople: "ผู้ใช้จริง",
     personCount: "{count} คน",
-    activeRoom: "ออนไลน์ในห้อง Pingle",
+    activeRoom: "ออนไลน์ในห้อง Nova",
     noOtherPerson: "ยังไม่มีคนอื่นในห้อง",
     otherWillAppear: "อีกฝ่ายจะปรากฏที่นี่เมื่อเชื่อมต่อ",
     back: "กลับ",
@@ -805,7 +856,7 @@ function renderHeader() {
 
   const filters = "";
   const titleMarkup = isChats
-    ? `<h1 class="brand-title"><img class="brand-logo" src="/assets/pingle-logo.svg" alt="" /> <span>${titles[state.activeTab]}</span></h1>`
+    ? `<h1 class="brand-title"><img class="brand-logo" src="/assets/nova-logo.svg" alt="" /> <span>${titles[state.activeTab]}</span></h1>`
     : `<h1 class="page-title">${titles[state.activeTab]}</h1>`;
 
   return `
@@ -1047,6 +1098,142 @@ function renderInfoModal() {
   `;
 }
 
+// ─── Auth Screens ─────────────────────────────────────
+
+function renderPhoneScreen() {
+  return `
+    <section class="auth-screen">
+      <div class="auth-container">
+        <h1 class="auth-logo">Nova</h1>
+        <p class="auth-subtitle">Telefon numaranızı girin</p>
+        <div class="auth-form">
+          <input id="phoneInput" class="auth-input" type="tel" placeholder="+90 555 123 45 67" value="${escapeHtml(authState.phone)}" maxlength="15" autocomplete="tel" />
+          ${authState.error ? `<p class="auth-error">${escapeHtml(authState.error)}</p>` : ""}
+          <button class="primary-btn auth-btn" id="sendOtpBtn" ${authState.isLoading ? "disabled" : ""}>
+            ${authState.isLoading ? '⏳' : 'OTP Gönder'}
+          </button>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function renderOtpScreen() {
+  return `
+    <section class="auth-screen">
+      <div class="auth-container">
+        <h1 class="auth-logo">Nova</h1>
+        <p class="auth-subtitle">${escapeHtml(authState.phone)} numarasına gönderilen kodu girin</p>
+        <div class="auth-form">
+          <input id="otpInput" class="auth-input otp-input" type="text" inputmode="numeric" maxlength="6" placeholder="123456" autocomplete="one-time-code" />
+          ${authState.error ? `<p class="auth-error">${escapeHtml(authState.error)}</p>` : ""}
+          <button class="primary-btn auth-btn" id="verifyOtpBtn" ${authState.isLoading ? "disabled" : ""}>
+            ${authState.isLoading ? '⏳' : 'Doğrula'}
+          </button>
+          <button class="text-btn" id="resendOtpBtn">Kodu tekrar gönder</button>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function renderProfileScreen() {
+  return `
+    <section class="auth-screen">
+      <div class="auth-container">
+        <div class="auth-avatar">${(authState.displayName || "?").charAt(0).toUpperCase()}</div>
+        <h1 class="auth-logo" style="font-size:22px">Profilinizi oluşturun</h1>
+        <div class="auth-form">
+          <input id="nameInput" class="auth-input" type="text" placeholder="Adınız" value="${escapeHtml(authState.displayName)}" maxlength="30" autocomplete="name" />
+          <input id="aboutInput" class="auth-input" type="text" placeholder="Durum (opsiyonel)" maxlength="80" />
+          ${authState.error ? `<p class="auth-error">${escapeHtml(authState.error)}</p>` : ""}
+          <button class="primary-btn auth-btn" id="saveProfileBtn" ${authState.isLoading ? "disabled" : ""}>
+            ${authState.isLoading ? '⏳' : 'Kaydet ve Başla'}
+          </button>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function bindAuthUI() {
+  const sendOtpBtn = document.getElementById("sendOtpBtn");
+  if (sendOtpBtn) {
+    sendOtpBtn.addEventListener("click", async () => {
+      const phone = document.getElementById("phoneInput")?.value?.trim() || "";
+      if (phone.replace(/\D/g, "").length < 7) { authState.error = "Geçerli bir telefon numarası girin"; render(); return; }
+      authState.isLoading = true; authState.error = ""; render();
+      const res = await apiPost("/api/v1/auth/otp/request", { phoneNumber: phone });
+      authState.isLoading = false;
+      if (res.ok) { authState.phone = phone; authState.error = ""; authState.screen = "otp"; render(); }
+      else { authState.error = res.error || "Hata"; render(); }
+    });
+  }
+  const verifyOtpBtn = document.getElementById("verifyOtpBtn");
+  if (verifyOtpBtn) {
+    verifyOtpBtn.addEventListener("click", async () => {
+      const otp = document.getElementById("otpInput")?.value?.trim() || "";
+      if (otp.length !== 6) { authState.error = "6 haneli kodu girin"; render(); return; }
+      authState.isLoading = true; authState.error = ""; render();
+      const res = await apiPost("/api/v1/auth/otp/verify", { phoneNumber: authState.phone, otp });
+      authState.isLoading = false;
+      if (res.ok) {
+        authState.token = res.token;
+        authState.userId = res.user?.id || "";
+        authState.displayName = res.user?.displayName || "";
+        saveToken(res.token);
+        localStorage.setItem(AUTH_PHONE_KEY, authState.phone);
+        localStorage.setItem(AUTH_USER_ID_KEY, authState.userId);
+        if (res.user?.displayName) {
+          localStorage.setItem(AUTH_DISPLAY_NAME_KEY, res.user.displayName);
+          authState.screen = "chat"; render(); initSocket();
+        } else {
+          authState.screen = "profile"; render();
+        }
+      } else { authState.error = res.error || "Hata"; render(); }
+    });
+  }
+  const resendOtpBtn = document.getElementById("resendOtpBtn");
+  if (resendOtpBtn) {
+    resendOtpBtn.addEventListener("click", async () => {
+      authState.isLoading = true; authState.error = ""; render();
+      const res = await apiPost("/api/v1/auth/otp/request", { phoneNumber: authState.phone });
+      authState.isLoading = false;
+      if (!res.ok) { authState.error = res.error || "Hata"; render(); }
+    });
+  }
+  const saveProfileBtn = document.getElementById("saveProfileBtn");
+  if (saveProfileBtn) {
+    saveProfileBtn.addEventListener("click", async () => {
+      const name = document.getElementById("nameInput")?.value?.trim() || "";
+      const about = document.getElementById("aboutInput")?.value?.trim() || "";
+      if (name.length < 2) { authState.error = "Ad en az 2 karakter olmalı"; render(); return; }
+      authState.isLoading = true; authState.error = ""; render();
+      const res = await apiPost("/api/v1/auth/profile", { displayName: name, about }, authState.token);
+      authState.isLoading = false;
+      if (res.ok) {
+        authState.displayName = name;
+        localStorage.setItem(AUTH_DISPLAY_NAME_KEY, name);
+        authState.screen = "chat"; render(); initSocket();
+      } else { authState.error = res.error || "Hata"; render(); }
+    });
+  }
+  document.querySelectorAll(".auth-input").forEach(input => {
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        const btn = document.querySelector(".auth-btn");
+        if (btn) btn.click();
+      }
+    });
+  });
+}
+
+function renderAuth() {
+  if (authState.screen === "phone") { app.innerHTML = renderPhoneScreen(); bindAuthUI(); }
+  else if (authState.screen === "otp") { app.innerHTML = renderOtpScreen(); bindAuthUI(); }
+  else if (authState.screen === "profile") { app.innerHTML = renderProfileScreen(); bindAuthUI(); }
+}
+
 function renderHome() {
   return `
     <section class="home-screen">
@@ -1269,6 +1456,10 @@ function renderThread() {
 }
 
 function render() {
+  if (authState.screen !== "chat") {
+    renderAuth();
+    return;
+  }
   if (state.view === "thread") {
     app.innerHTML = renderThread();
   } else if (state.view === "contacts") {

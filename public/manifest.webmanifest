@@ -1,6 +1,6 @@
 {
-  "name": "Pingle",
-  "short_name": "Pingle",
+  "name": "Nova",
+  "short_name": "Nova",
   "description": "AYFSOFT & Yusuf Avşar tarafından geliştirilen Türkçe-Tayca mesajlaşma ve arama uygulaması.",
   "start_url": "/",
   "scope": "/",
@@ -10,7 +10,7 @@
   "theme_color": "#0b1014",
   "icons": [
     {
-      "src": "/assets/pingle-logo.svg",
+      "src": "/assets/nova-logo.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
