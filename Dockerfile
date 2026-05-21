@@ -22,5 +22,5 @@ COPY --from=builder /app/prisma.config.ts ./
 
 EXPOSE ${PORT:-3000}
 
-# Sync the fresh Render PostgreSQL database and start
-CMD ["sh", "-c", "npx prisma db push && node server.js"]
+# Run migrations and start
+CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]

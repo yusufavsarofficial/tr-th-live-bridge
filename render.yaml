@@ -33,7 +33,7 @@ services:
       - key: OPENAI_TRANSLATE_MODEL
         value: gpt-4.1-mini
       - key: TRANSLATION_PROVIDER
-        value: openai-first
+        value: google-first
       - key: TRANSLATE_TIMEOUT_MS
         value: 7000
       - key: CORS_ORIGIN
@@ -44,6 +44,12 @@ services:
         sync: false
       - key: VAPID_PRIVATE_KEY
         sync: false
+      - key: VAPID_SUBJECT
+        value: mailto:nova@ayfsoft.com
+      - key: ALLOWED_USERS
+        value: "+905514883842,+66642177978"
+      - key: RTC_ICE_SERVERS_JSON
+        value: '[{"urls":"stun:stun.l.google.com:19302"}]'
 
 databases:
   - name: nova-db
