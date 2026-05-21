@@ -114,8 +114,14 @@ private fun AppNavigationContent(
                 scope.launch {
                     val result = withContext(Dispatchers.IO) { api.requestOtp(phone) }
                     isLoading = false
-                    if (result.isOk()) { phoneNumber = phone; currentScreen = AppScreen.OTP }
-                    else error = result.error()
+                    if (result.isOk()) {
+                        phoneNumber = phone
+                        // Set language from server response
+                        val langStr = result.json.optString("lang", "en")
+                        val lang = when (langStr) { "tr" -> PingleLanguage.TURKISH; "th" -> PingleLanguage.THAI; "ru" -> PingleLanguage.RUSSIAN; "zh" -> PingleLanguage.CHINESE; else -> PingleLanguage.ENGLISH }
+                        onLanguageChanged(lang)
+                        currentScreen = AppScreen.OTP
+                    } else error = result.error()
                 }
             },
             isLoading = isLoading, error = error,
@@ -135,6 +141,9 @@ private fun AppNavigationContent(
                         userId = result.json.optJSONObject("user")?.optString("id", "") ?: ""
                         val name = result.json.optJSONObject("user")?.optString("displayName", "") ?: ""
                         tokenStorage.saveToken(token); tokenStorage.saveUserId(userId); tokenStorage.savePhone(phoneNumber)
+                        val langStr = result.json.optString("lang", "en")
+                        val lang = when (langStr) { "tr" -> PingleLanguage.TURKISH; "th" -> PingleLanguage.THAI; "ru" -> PingleLanguage.RUSSIAN; "zh" -> PingleLanguage.CHINESE; else -> PingleLanguage.ENGLISH }
+                        onLanguageChanged(lang)
                         if (name.isNotBlank()) { displayName = name; currentScreen = AppScreen.MAIN }
                         else currentScreen = AppScreen.PROFILE
                     } else error = result.error()
