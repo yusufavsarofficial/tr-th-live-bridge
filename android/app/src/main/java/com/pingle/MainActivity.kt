@@ -1,7 +1,11 @@
 package com.pingle
 
+import android.Manifest
 import android.app.Activity
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -9,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -17,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -43,6 +49,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         tokenStorage = TokenStorage(this)
         api = PingleApi(BuildConfig.BACKEND_URL)
+        PingleFirebaseService.init(this)
+        requestNotificationPermission()
 
         setContent {
             PingleTheme {
@@ -56,6 +64,14 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         scope.cancel()
         super.onDestroy()
+    }
+
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 413)
+        }
     }
 }
 
@@ -102,6 +118,10 @@ private fun AppNavigationContent(
         if ((currentScreen == AppScreen.MAIN || currentScreen == AppScreen.CHAT) && token.isEmpty()) { currentScreen = AppScreen.PHONE }
     }
 
+    LaunchedEffect(token) {
+        if (token.isNotBlank()) PingleFirebaseService.syncPushToken(activity)
+    }
+
     when (currentScreen) {
         AppScreen.SPLASH -> SplashScreen(onSplashDone = {
             currentScreen = if (tokenStorage.hasToken()) AppScreen.MAIN else AppScreen.PHONE
@@ -141,6 +161,7 @@ private fun AppNavigationContent(
                         userId = result.json.optJSONObject("user")?.optString("id", "") ?: ""
                         val name = result.json.optJSONObject("user")?.optString("displayName", "") ?: ""
                         tokenStorage.saveToken(token); tokenStorage.saveUserId(userId); tokenStorage.savePhone(phoneNumber)
+                        PingleFirebaseService.syncPushToken(activity)
                         val langStr = result.json.optString("lang", "en")
                         val lang = when (langStr) { "tr" -> PingleLanguage.TURKISH; "th" -> PingleLanguage.THAI; "ru" -> PingleLanguage.RUSSIAN; "zh" -> PingleLanguage.CHINESE; else -> PingleLanguage.ENGLISH }
                         onLanguageChanged(lang)
@@ -166,7 +187,7 @@ private fun AppNavigationContent(
                 scope.launch {
                     val result = withContext(Dispatchers.IO) { api.updateProfile(token, name, about) }
                     isLoading = false
-                    if (result.isOk()) { displayName = name; tokenStorage.saveDisplayName(name); currentScreen = AppScreen.MAIN }
+                    if (result.isOk()) { displayName = name; tokenStorage.saveDisplayName(name); PingleFirebaseService.syncPushToken(activity); currentScreen = AppScreen.MAIN }
                     else error = result.error()
                 }
             },
@@ -217,6 +238,14 @@ private fun AppNavigationContent(
                             Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = androidx.compose.material3.MaterialTheme.colorScheme.onSurface)
                         }
                         Text(activeConversation?.otherUser?.displayName ?: activeConversation?.otherUser?.phoneNumber ?: "Chat", color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        IconButton(onClick = {
+                            scope.launch {
+                                val ok = withContext(Dispatchers.IO) { api.sendUrgentAlert(token, convId) }
+                                Toast.makeText(activity, if (ok) "Acil uyari gonderildi" else "Acil uyari gonderilemedi", Toast.LENGTH_SHORT).show()
+                            }
+                        }) {
+                            Icon(Icons.Default.Warning, contentDescription = "Urgent alert", tint = Color(0xFFFFB74D))
+                        }
                         IconButton(onClick = { appState.startCall("voice") }) {
                             Icon(Icons.Default.Call, contentDescription = "Voice call", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }

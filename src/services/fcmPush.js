@@ -37,11 +37,30 @@ function createFcmPushService(config) {
   async function sendPush(userId, title, body, data = {}) {
     if (!_ready) return { error: "FCM not initialized" };
     try {
+      const type = String(data.type || "message");
+      const isUrgent = type === "urgent" || data.urgent === "true";
       const message = {
         token: userId, // userId is actually the FCM token here
         notification: { title, body },
-        data: { ...data, click_action: "OPEN_CHAT" },
-        android: { priority: "high", ttl: 86400000 },
+        data: {
+          ...Object.fromEntries(Object.entries(data).map(([key, value]) => [key, String(value)])),
+          type,
+          title,
+          body,
+          click_action: "OPEN_CHAT",
+        },
+        android: {
+          priority: "high",
+          ttl: isUrgent ? 300000 : 86400000,
+          notification: {
+            channelId: isUrgent ? "pingle_urgent" : type === "call" ? "pingle_calls" : "pingle_messages",
+            priority: "max",
+            sound: "default",
+            visibility: "public",
+            defaultVibrateTimings: !isUrgent,
+            eventTimestamp: new Date(),
+          },
+        },
       };
       const response = await _messaging.send(message);
       return { ok: true, messageId: response };

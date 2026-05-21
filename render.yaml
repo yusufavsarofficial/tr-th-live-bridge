@@ -3,7 +3,6 @@ services:
     name: nova-api
     runtime: docker
     plan: starter
-    repo: https://github.com/your-org/nova
     branch: main
     autoDeploy: true
     healthCheckPath: /health

@@ -12,12 +12,17 @@ function getPrisma() {
       _prisma = new PrismaClient({ adapter });
     } else {
       const { PrismaBetterSqlite3 } = require("@prisma/adapter-better-sqlite3");
-      const dbPath = path.join(__dirname, "..", "..", "dev.db");
-      const adapter = new PrismaBetterSqlite3({ url: `file:${dbPath}` });
+      const adapter = new PrismaBetterSqlite3({ url: sqliteUrl() });
       _prisma = new PrismaClient({ adapter });
     }
   }
   return _prisma;
+}
+
+function sqliteUrl() {
+  const configured = String(process.env.DATABASE_URL || "").trim();
+  if (configured) return configured;
+  return `file:${path.join(__dirname, "..", "..", "dev.db")}`;
 }
 
 async function createPrismaStorage() {
@@ -171,7 +176,7 @@ async function createPrismaStorage() {
   async function updateConversation(convId, updates) {
     const { unreadCount, ...rest } = updates;
 
-    if (rest) {
+    if (Object.keys(rest).length > 0) {
       await prisma.conversation.update({
         where: { id: convId },
         data: { ...rest },

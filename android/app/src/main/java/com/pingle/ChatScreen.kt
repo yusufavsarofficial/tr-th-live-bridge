@@ -28,15 +28,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.camera.view.PreviewView
 import com.pingle.i18n.LocalStrings
 import com.pingle.ui.theme.*
+import com.pingle.video.VideoCallManager
 import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.*
@@ -49,10 +52,55 @@ private val EMOJIS = listOf(
 
 @Composable
 fun PingleApp(appState: PingleAppState) {
-    if (appState.call.visible) {
-        VideoCallScreen(appState)
-    } else {
-        ChatScreen(appState)
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (appState.call.visible && !appState.call.minimized) {
+            VideoCallScreen(appState)
+        } else {
+            ChatScreen(appState)
+        }
+        if (appState.call.visible && appState.call.minimized) {
+            MinimizedCallOverlay(
+                appState = appState,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 72.dp, end = 12.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun MinimizedCallOverlay(appState: PingleAppState, modifier: Modifier = Modifier) {
+    val s = LocalStrings.current
+    val call = appState.call
+    Surface(
+        modifier = modifier
+            .widthIn(min = 172.dp, max = 248.dp)
+            .clickable { appState.call = call.copy(minimized = false) },
+        shape = RoundedCornerShape(18.dp),
+        color = Color(0xEE101A1F),
+        tonalElevation = 8.dp,
+        shadowElevation = 10.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 12.dp, top = 10.dp, end = 8.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                if (call.mode == "video") Icons.Default.Videocam else Icons.Default.Call,
+                contentDescription = null,
+                tint = Color(0xFF25D366),
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(call.peerName.ifBlank { "Nova" }, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                Text(call.status, color = Color.White.copy(alpha = 0.68f), fontSize = 11.sp, maxLines = 1)
+            }
+            IconButton(onClick = appState::endCall, modifier = Modifier.size(34.dp)) {
+                Icon(Icons.Default.CallEnd, contentDescription = s.endCall, tint = Color(0xFFFF6B6B), modifier = Modifier.size(20.dp))
+            }
+        }
     }
 }
 
@@ -296,9 +344,40 @@ private fun VideoCallScreen(appState: PingleAppState) {
     val s = LocalStrings.current
     val call = appState.call
     val bgColor = Color(0xFF0B1014)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val socket = appState.activeSocket
+    var callManager by remember { mutableStateOf<VideoCallManager?>(null) }
+
+    DisposableEffect(socket, call.visible, call.incoming, call.mode, call.minimized) {
+        val activeManager = if (socket != null && call.visible && !call.incoming && !call.minimized) {
+            VideoCallManager(
+                lifecycleOwner = lifecycleOwner,
+                socket = socket,
+                conversationId = appState.currentConversationId,
+                userId = appState.currentUserId,
+                isVideoCall = call.mode == "video",
+            )
+        } else {
+            null
+        }
+        callManager = activeManager
+        activeManager?.startCall()
+        if (activeManager != null) {
+            appState.setRemoteAudioHandler { audioBase64 ->
+                try {
+                    val bytes = Base64.decode(audioBase64, Base64.NO_WRAP)
+                    activeManager.handleRemoteAudio(bytes)
+                } catch (_: Exception) { }
+            }
+        }
+        onDispose {
+            appState.setRemoteAudioHandler(null)
+            activeManager?.endCall()
+            callManager = null
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize().background(bgColor).statusBarsPadding()) {
-        // Remote video (main area)
         Box(
             modifier = Modifier.weight(1f).fillMaxWidth().background(Color(0xFF1a1a1a)),
             contentAlignment = Alignment.Center
@@ -329,18 +408,30 @@ private fun VideoCallScreen(appState: PingleAppState) {
                 }
             }
 
-            // Local PiP preview
             if (call.mode == "video" && call.cameraEnabled && !call.incoming) {
                 Box(
                     modifier = Modifier.align(Alignment.TopEnd).padding(12.dp).size(120.dp, 160.dp).background(Color(0xFF2a2a2a), RoundedCornerShape(12.dp)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.Videocam, contentDescription = "Camera", tint = Color.White.copy(alpha = 0.3f), modifier = Modifier.size(32.dp))
+                    val manager = callManager
+                    if (manager != null) {
+                        AndroidView(
+                            factory = { context ->
+                                PreviewView(context).apply {
+                                    scaleType = PreviewView.ScaleType.FILL_CENTER
+                                    manager.startCamera(this)
+                                }
+                            },
+                            update = { preview -> manager.startCamera(preview) },
+                            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp))
+                        )
+                    } else {
+                        Icon(Icons.Default.Videocam, contentDescription = "Camera", tint = Color.White.copy(alpha = 0.3f), modifier = Modifier.size(32.dp))
+                    }
                 }
             }
         }
 
-        // Call controls
         Column(modifier = Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.6f)).padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             if (call.incoming) {
                 Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
@@ -350,9 +441,25 @@ private fun VideoCallScreen(appState: PingleAppState) {
                 Spacer(Modifier.height(16.dp))
             }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                ToggleButton(active = call.muted, icon = if (call.muted) Icons.Default.MicOff else Icons.Default.Mic, label = s.mute, onClick = appState::toggleMute)
+                ToggleButton(
+                    active = call.muted,
+                    icon = if (call.muted) Icons.Default.MicOff else Icons.Default.Mic,
+                    label = s.mute,
+                    onClick = {
+                        val muted = callManager?.toggleMute() ?: !appState.call.muted
+                        appState.call = appState.call.copy(muted = muted)
+                    }
+                )
                 if (call.mode == "video") {
-                    ToggleButton(active = !call.cameraEnabled, icon = if (call.cameraEnabled) Icons.Default.Videocam else Icons.Default.VideocamOff, label = s.camera, onClick = appState::toggleCamera)
+                    ToggleButton(
+                        active = !call.cameraEnabled,
+                        icon = if (call.cameraEnabled) Icons.Default.Videocam else Icons.Default.VideocamOff,
+                        label = s.camera,
+                        onClick = {
+                            val cameraEnabled = callManager?.toggleCamera() ?: !appState.call.cameraEnabled
+                            appState.call = appState.call.copy(cameraEnabled = cameraEnabled)
+                        }
+                    )
                 }
                 ToggleButton(active = false, icon = Icons.Default.VolumeUp, label = s.speaker, onClick = appState::toggleSpeaker)
                 Box(
@@ -362,7 +469,7 @@ private fun VideoCallScreen(appState: PingleAppState) {
                     IconButton(onClick = appState::endCall) { Icon(Icons.Default.CallEnd, contentDescription = s.endCall, tint = Color.White) }
                 }
             }
-            TextButton(onClick = { appState.call = CallUiState() }) { Text(s.minimize, color = Color.White.copy(alpha = 0.6f)) }
+            TextButton(onClick = { appState.call = appState.call.copy(minimized = true) }) { Text(s.minimize, color = Color.White.copy(alpha = 0.6f)) }
         }
     }
 }

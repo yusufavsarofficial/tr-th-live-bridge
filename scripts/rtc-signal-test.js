@@ -128,6 +128,7 @@ async function run() {
     env: {
       ...process.env,
       PORT: String(preferredPort),
+      DATABASE_URL: "",
       DATA_FILE: dataFile,
       NOTIFICATION_FILE: notificationFile,
       OPENAI_API_KEY: "",
@@ -141,7 +142,7 @@ async function run() {
 
   server.stdout.on("data", (chunk) => {
     const text = chunk.toString();
-    if (text.includes("Pingle is running")) {
+    if (text.includes("is running at")) {
       serverReady = true;
       const match = text.match(/http:\/\/localhost:(\d+)/);
       serverUrl = match ? `http://localhost:${match[1]}` : `http://localhost:${preferredPort}`;

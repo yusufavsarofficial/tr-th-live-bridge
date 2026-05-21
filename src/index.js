@@ -54,7 +54,7 @@ async function createApp() {
   app.use("/health", createHealthRouter(() => handlers.getPublicUsers()));
   app.use("/api/v1/auth", createAuthRouter(storage));
   app.use("/api/v1/contacts", createContactRouter(storage));
-  app.use("/api/v1/conversations", createConversationRouter(storage));
+  app.use("/api/v1/conversations", createConversationRouter(storage, fcmPushService));
   app.use("/api/v1", requireAuth, createApiRouter(io, history, pushSubscriptions, vapidKeys, (keys, subs) => storage.persistNotificationState(keys, subs), pushSubscriptions, () => handlers.getPublicUsers(), () => handlers.clearHistory(), (text, key, vars) => handlers.emitSystem(text, key, vars), storage));
   app.use("/api", createApiRouter(io, history, pushSubscriptions, vapidKeys, (keys, subs) => storage.persistNotificationState(keys, subs), pushSubscriptions, () => handlers.getPublicUsers(), () => handlers.clearHistory(), (text, key, vars) => handlers.emitSystem(text, key, vars), storage));
 
@@ -93,11 +93,12 @@ function startServer(instance) {
 }
 
 if (require.main === module) {
-  const instance = createApp();
-  startServer(instance).catch((err) => {
-    console.error("Failed to start:", err.message);
-    process.exitCode = 1;
-  });
+  createApp()
+    .then((instance) => startServer(instance))
+    .catch((err) => {
+      console.error("Failed to start:", err.message);
+      process.exitCode = 1;
+    });
 }
 
 module.exports = { createApp, startServer };

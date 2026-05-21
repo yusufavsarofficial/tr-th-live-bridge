@@ -24,6 +24,7 @@ build/
 .gradle/
 android/.gradle/
 android/app/build/
+android/local.properties
 backend/dist/
 *.apk
 *.aab

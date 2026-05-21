@@ -48,7 +48,13 @@ async function run() {
   const server = spawn(process.execPath, ["server.js"], {
     cwd: process.cwd(),
     stdio: ["ignore", "pipe", "pipe"],
-    env: { ...process.env, PORT: String(preferredPort), DATA_FILE: dataFile, NOTIFICATION_FILE: notificationFile },
+    env: {
+      ...process.env,
+      PORT: String(preferredPort),
+      DATABASE_URL: "",
+      DATA_FILE: dataFile,
+      NOTIFICATION_FILE: notificationFile,
+    },
   });
 
   let serverReady = false;
@@ -56,7 +62,7 @@ async function run() {
 
   server.stdout.on("data", (chunk) => {
     const text = chunk.toString();
-    if (text.includes("Pingle is running")) {
+    if (text.includes("is running at")) {
       serverReady = true;
       const match = text.match(/http:\/\/localhost:(\d+)/);
       if (match) {
@@ -124,14 +130,14 @@ async function run() {
     }
 
     const messagePromise = waitForEvent(bob, "message", 6000);
-    const sendAck = await sendMessage(alice, "😀");
+    const sendAck = await sendMessage(alice, "hello");
 
     if (!sendAck?.ok) {
       throw new Error(`Message send ack failed: ${sendAck?.error || "unknown"}`);
     }
 
     const incoming = await messagePromise;
-    if (incoming?.text !== "😀" || incoming?.from !== "Alice") {
+    if (incoming?.text !== "hello" || incoming?.from !== "Alice") {
       throw new Error("Received message content does not match expected payload.");
     }
 

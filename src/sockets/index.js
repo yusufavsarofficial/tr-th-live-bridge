@@ -47,7 +47,6 @@ function createSocketHandlers(io, config, history, pushSubscriptions, vapidKeys,
 
     ack?.({ ok: true, me: { name, avatarUrl }, users: getPublicUsers(), maxUsers: config.maxUsers, maxMessageLength: config.maxMessageLength, history, roomCodeRequired: Boolean(config.roomCode), roomPinRequired: Boolean(config.roomPin) });
 
-    emitSystem(`${name} odaya katıldı.`, "systemJoined", { name });
     emitRoster();
     deliverOfflineEvents(socket, name);
   }
@@ -159,7 +158,6 @@ function createSocketHandlers(io, config, history, pushSubscriptions, vapidKeys,
     clearPendingCallForSocket(socket.id);
     socket.to("pingle-room").emit("typing", { name: user.name, isTyping: false, timestamp: Date.now() });
     socket.to("pingle-room").emit("call:end", { from: { name: user.name, avatarUrl: user.avatarUrl }, reason: "disconnect", timestamp: Date.now() });
-    emitSystem(`${user.name} odadan ayrıldı.`, "systemLeft", { name: user.name });
     emitRoster();
   }
 
@@ -190,7 +188,7 @@ function createSocketHandlers(io, config, history, pushSubscriptions, vapidKeys,
   }
 
   function emitSystem(text, key = "", vars = {}) {
-    io.to("pingle-room").emit("system", { text, key, vars, timestamp: Date.now() });
+    // Join/leave banners are intentionally suppressed for a cleaner daily chat UI.
   }
 
   function pushHistory(message) {

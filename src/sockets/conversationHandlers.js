@@ -7,7 +7,6 @@ function detectLangFromPhone(phoneNumber) {
 }
 
 function createConversationHandlers(io, storage, fcmPushService) {
-
   function setup(socket) {
     socket.on("join:conversation", (payload, ack) => handleJoinConversation(socket, payload, ack));
     socket.on("leave:conversation", (payload) => handleLeaveConversation(socket, payload));
@@ -21,14 +20,15 @@ function createConversationHandlers(io, storage, fcmPushService) {
     socket.on("call:audio", (payload) => handleCallAudio(socket, payload));
   }
 
-  function handleJoinConversation(socket, payload, ack) {
+  async function handleJoinConversation(socket, payload, ack) {
     const convId = String(payload?.conversationId || "").trim();
     if (!convId) return ack?.({ ok: false, error: "conversationId required" });
 
     const userId = socket.data?.user?.sub;
     if (!userId) return ack?.({ ok: false, error: "Not authenticated" });
 
-    storage.getConversationById(convId).then(conv => {
+    try {
+      const conv = await storage.getConversationById(convId);
       if (!conv) return ack?.({ ok: false, error: "Conversation not found" });
       if (!conv.participants.includes(userId)) return ack?.({ ok: false, error: "Not a participant" });
 
@@ -38,97 +38,111 @@ function createConversationHandlers(io, storage, fcmPushService) {
       if (!socket.data.currentRooms.includes(room)) socket.data.currentRooms.push(room);
 
       ack?.({ ok: true, conversationId: convId });
-    });
+    } catch (e) {
+      console.error("join:conversation failed:", e.message);
+      ack?.({ ok: false, error: "Could not join conversation" });
+    }
   }
 
-  function handleConversationMessage(socket, payload, ack) {
+  async function handleConversationMessage(socket, payload, ack) {
     const userId = socket.data?.user?.sub;
     if (!userId) return ack?.({ ok: false, error: "Not authenticated" });
 
     const convId = String(payload?.conversationId || "").trim();
     if (!convId) return ack?.({ ok: false, error: "conversationId required" });
 
-    storage.getConversationById(convId).then(conv => {
+    try {
+      const conv = await storage.getConversationById(convId);
       if (!conv || !conv.participants.includes(userId)) return ack?.({ ok: false, error: "Not a participant" });
 
-      storage.findUserById(userId).then(user => {
-        const rawText = String(payload?.text || "").trim();
-        const imageData = String(payload?.imageData || "").trim();
+      const user = await storage.findUserById(userId);
+      const rawText = String(payload?.text || "").trim().slice(0, 4000);
+      const imageData = String(payload?.imageData || "").trim();
 
-        if (!rawText && !imageData) return ack?.({ ok: false, error: "Message text or image required" });
-        if (imageData && !imageData.startsWith("data:image/")) return ack?.({ ok: false, error: "Invalid image data" });
+      if (!rawText && !imageData) return ack?.({ ok: false, error: "Message text or image required" });
+      if (imageData && !imageData.startsWith("data:image/")) return ack?.({ ok: false, error: "Invalid image data" });
 
-        const senderLang = detectLangFromPhone(user?.phoneNumber || "");
-        const otherUserId = conv.participants.find(id => id !== userId);
-        const doTranslate = rawText && otherUserId;
+      const otherUserId = conv.participants.find((id) => id !== userId);
+      const senderLang = await resolveSenderLang(user, rawText);
+      const translatedText = await translateForRecipient(rawText, senderLang, otherUserId);
 
-        const makeMessage = (translatedText) => {
-          const message = {
-            id: crypto.randomUUID(),
-            conversationId: convId,
-            from: userId,
-            fromName: user?.displayName || user?.phoneNumber || "Unknown",
-            text: rawText.slice(0, 4000),
-            translatedText: translatedText || null,
-            imageData: imageData || null,
-            timestamp: Date.now(),
-            status: "sent",
-            sourceLang: senderLang,
-          };
+      const message = {
+        id: crypto.randomUUID(),
+        conversationId: convId,
+        from: userId,
+        fromName: user?.displayName || user?.phoneNumber || "Unknown",
+        text: rawText,
+        translatedText: translatedText || null,
+        sourceLang: senderLang,
+        imageData: imageData || null,
+        timestamp: Date.now(),
+        status: "sent",
+      };
 
-          Promise.all([
-            storage.saveMessage(convId, message),
-            storage.updateConversation(convId, {
-              lastMessage: rawText.slice(0, 100) || (imageData ? "📷 Photo" : ""),
-              lastMessageSender: userId,
-              unreadCount: buildUnreadCount(conv, userId),
-            }),
-          ]).then(() => {
-            const room = `conv:${convId}`;
-            io.to(room).emit("conversation:message", message);
-            ack?.({ ok: true, id: message.id, timestamp: message.timestamp });
+      await Promise.all([
+        storage.saveMessage(convId, message),
+        storage.updateConversation(convId, {
+          lastMessage: rawText.slice(0, 100) || (imageData ? "Photo" : ""),
+          lastMessageSender: userId,
+          unreadCount: buildUnreadCount(conv, userId),
+        }),
+      ]);
 
-            // Send FCM push notification to other participants
-            if (fcmPushService?.isReady()) {
-              if (otherUserId) {
-                storage.getFcmTokens(otherUserId).then(tokens => {
-                  if (tokens.length > 0) {
-                    const title = message.fromName || "Nova";
-                    const body = message.text?.slice(0, 200) || (message.imageData ? "📷 Photo" : "New message");
-                    fcmPushService.sendToMultiple(tokens, title, body, {
-                      conversationId: convId,
-                      messageId: message.id,
-                      senderId: userId,
-                    });
-                  }
-                });
-              }
-            }
-          });
-        };
+      io.to(`conv:${convId}`).emit("conversation:message", message);
+      ack?.({ ok: true, id: message.id, timestamp: message.timestamp });
 
-        if (!doTranslate) {
-          return makeMessage(null);
-        }
+      notifyOtherParticipant(otherUserId, message);
+    } catch (e) {
+      console.error("conversation:message failed:", e.message);
+      ack?.({ ok: false, error: "Message could not be sent" });
+    }
+  }
 
-        storage.findUserById(otherUserId).then(otherUser => {
-          const targetLang = detectLangFromPhone(otherUser?.phoneNumber || "");
-          if (senderLang === targetLang || !rawText) {
-            return makeMessage(null);
-          }
+  async function resolveSenderLang(user, rawText) {
+    if (rawText) {
+      try {
+        const { detectSourceLanguage } = require("../services/translate");
+        return detectSourceLanguage(rawText);
+      } catch {
+        return detectLangFromPhone(user?.phoneNumber || "");
+      }
+    }
+    return detectLangFromPhone(user?.phoneNumber || "");
+  }
 
-          try {
-            const { createTranslationService } = require("../services/translate");
-            const { config } = require("../config");
-            const translator = createTranslationService(config);
-            translator.safeTranslate(rawText, senderLang, targetLang).then(translated => {
-              makeMessage(translated || null);
-            }).catch(() => makeMessage(null));
-          } catch (e) {
-            makeMessage(null);
-          }
-        }).catch(() => makeMessage(null));
-      });
+  async function translateForRecipient(rawText, senderLang, otherUserId) {
+    if (!rawText || !otherUserId) return null;
+
+    const otherUser = await storage.findUserById(otherUserId);
+    const targetLang = detectLangFromPhone(otherUser?.phoneNumber || "");
+    if (senderLang === targetLang) return null;
+
+    try {
+      const { createTranslationService } = require("../services/translate");
+      const { config } = require("../config");
+      const translator = createTranslationService(config);
+      const translated = await translator.safeTranslate(rawText, senderLang, targetLang);
+      return translated && translated !== rawText ? translated : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function notifyOtherParticipant(otherUserId, message) {
+    if (!fcmPushService?.isReady() || !otherUserId) return;
+
+    storage.getFcmTokens(otherUserId).then((tokens) => {
+      if (tokens.length > 0) {
+        const title = message.fromName || "Nova";
+        const body = message.translatedText || message.text?.slice(0, 200) || (message.imageData ? "Photo" : "New message");
+        fcmPushService.sendToMultiple(tokens, title, body, {
+          conversationId: message.conversationId,
+          messageId: message.id,
+          senderId: message.from,
+        });
+      }
+    }).catch(() => {
+      // FCM is best-effort and should never make message delivery fail.
     });
   }
 
@@ -139,7 +153,7 @@ function createConversationHandlers(io, storage, fcmPushService) {
     const convId = String(payload?.conversationId || "").trim();
     if (!convId) return;
 
-    storage.getConversationById(convId).then(conv => {
+    storage.getConversationById(convId).then((conv) => {
       if (!conv) return;
 
       const unreadCount = { ...(conv.unreadCount || {}) };
@@ -157,11 +171,12 @@ function createConversationHandlers(io, storage, fcmPushService) {
   function handleCallOffer(socket, payload, ack) {
     const userId = socket.data?.user?.sub;
     if (!userId) return ack?.({ ok: false, error: "Not authenticated" });
+
     const convId = String(payload?.conversationId || "").trim();
     if (!convId) return ack?.({ ok: false, error: "conversationId required" });
-    storage.findUserById(userId).then(user => {
-      const room = `conv:${convId}`;
-      socket.to(room).emit("call:offer", {
+
+    storage.findUserById(userId).then((user) => {
+      socket.to(`conv:${convId}`).emit("call:offer", {
         conversationId: convId,
         from: userId,
         fromName: user?.displayName || user?.phoneNumber || "Unknown",
@@ -169,16 +184,17 @@ function createConversationHandlers(io, storage, fcmPushService) {
         timestamp: Date.now(),
       });
       ack?.({ ok: true });
-    });
+    }).catch(() => ack?.({ ok: false, error: "Call could not be started" }));
   }
 
   function handleLeaveConversation(socket, payload) {
     const convId = String(payload?.conversationId || "").trim();
     if (!convId) return;
+
     const room = `conv:${convId}`;
     socket.leave(room);
     if (socket.data.currentRooms) {
-      socket.data.currentRooms = socket.data.currentRooms.filter(r => r !== room);
+      socket.data.currentRooms = socket.data.currentRooms.filter((r) => r !== room);
     }
   }
 
@@ -189,12 +205,10 @@ function createConversationHandlers(io, storage, fcmPushService) {
     const convId = String(payload?.conversationId || "").trim();
     if (!convId) return;
 
-    const isTyping = Boolean(payload?.isTyping);
-    const room = `conv:${convId}`;
-    socket.to(room).emit("conversation:typing", {
+    socket.to(`conv:${convId}`).emit("conversation:typing", {
       conversationId: convId,
       userId,
-      isTyping,
+      isTyping: Boolean(payload?.isTyping),
       timestamp: Date.now(),
     });
   }
@@ -212,8 +226,10 @@ function createConversationHandlers(io, storage, fcmPushService) {
   function handleCallAnswer(socket, payload, ack) {
     const userId = socket.data?.user?.sub;
     if (!userId) return ack?.({ ok: false, error: "Not authenticated" });
+
     const convId = String(payload?.conversationId || "").trim();
-    if (!convId) return;
+    if (!convId) return ack?.({ ok: false, error: "conversationId required" });
+
     socket.to(`conv:${convId}`).emit("call:answer", {
       conversationId: convId,
       from: userId,
@@ -225,8 +241,10 @@ function createConversationHandlers(io, storage, fcmPushService) {
   function handleCallEnd(socket, payload) {
     const userId = socket.data?.user?.sub;
     if (!userId) return;
+
     const convId = String(payload?.conversationId || "").trim();
     if (!convId) return;
+
     socket.to(`conv:${convId}`).emit("call:end", {
       conversationId: convId,
       from: userId,
@@ -238,8 +256,10 @@ function createConversationHandlers(io, storage, fcmPushService) {
   function handleCallFrame(socket, payload) {
     const userId = socket.data?.user?.sub;
     if (!userId) return;
+
     const convId = String(payload?.conversationId || "").trim();
     if (!convId) return;
+
     socket.to(`conv:${convId}`).emit("call:frame", {
       conversationId: convId,
       from: userId,
@@ -251,8 +271,10 @@ function createConversationHandlers(io, storage, fcmPushService) {
   function handleCallAudio(socket, payload) {
     const userId = socket.data?.user?.sub;
     if (!userId) return;
+
     const convId = String(payload?.conversationId || "").trim();
     if (!convId) return;
+
     socket.to(`conv:${convId}`).emit("call:audio", {
       conversationId: convId,
       from: userId,

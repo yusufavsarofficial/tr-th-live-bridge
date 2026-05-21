@@ -22,5 +22,5 @@ COPY --from=builder /app/prisma.config.ts ./
 
 EXPOSE ${PORT:-3000}
 
-# Sync schema and start
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node server.js"]
+# Select the production schema, sync the database, and start.
+CMD ["sh", "-c", "node scripts/setup-prisma.js && npx prisma db push && node server.js"]

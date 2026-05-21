@@ -46,6 +46,7 @@ function connectSocket(token) {
     transports: ["websocket", "polling"],
     auth: { token },
   });
+  registerSocketHandlers(socket);
   return socket;
 }
 
@@ -121,9 +122,9 @@ const i18n = {
     save: "Kaydet",
     connect: "Bağlan",
     privacyTitle: "Gizlilik ve güven",
-    privacyP1: "Nova, AYFSOFT & Yusuf Avşar tarafından geliştirilen, iki kişi arasında hızlı, sade ve güvenli iletişim kurmayı amaçlayan özel bir sohbet uygulamasıdır.",
-    privacyP2: "Mesajlarınız, arama sinyalleriniz, profil bilgileriniz ve medya paylaşımlarınız yalnızca bu odaya katılan kişiler için anlamlı olacak şekilde tasarlanmıştır. Uygulama Türkçe ve Tayca konuşan kullanıcılar için otomatik çeviri, emoji, ses kaydı, fotoğraf, dosya ve görüntülü görüşmeyi tek mobil deneyimde toplar.",
-    privacyP3: "Hedefimiz tanıdık bir mesajlaşma deneyimine yakın, fakat Nova ruhuyla daha hafif çalışan bir yapı kurmak: net görüntü, düşük internet tüketimi, hızlı bildirim, anlaşılır arayüz ve gereksiz kalabalıktan uzak bir konuşma alanı.",
+    privacyP1: "Nova, iki kişi arasında özel ve kesintisiz iletişim için hazırlanmış bir mesajlaşma ve arama uygulamasıdır. Sohbet, sesli arama, görüntülü arama, medya paylaşımı ve Türkçe-Tayca çeviri tek sade arayüzde toplanır.",
+    privacyP2: "Mesajlar, medya içerikleri ve arama sinyalleri yalnızca konuşmadaki kişiler için işlenir. Bildirimler, çağrılar ve çeviriler iletişimin hızlı, anlaşılır ve güvenilir kalması amacıyla kullanılır.",
+    privacyP3: "Uygulama günlük kullanıma uygun olacak şekilde tasarlanmıştır: düşük veri tüketimi, net görüşme kalitesi, hızlı bildirimler, okunaklı sohbet ekranı ve gereksiz kalabalıktan uzak bir deneyim hedeflenir.",
     understood: "Anladım",
     realPeople: "Gerçek kişiler",
     personCount: "{count} kişi",
@@ -267,9 +268,9 @@ const i18n = {
     save: "บันทึก",
     connect: "เชื่อมต่อ",
     privacyTitle: "ความเป็นส่วนตัวและความปลอดภัย",
-    privacyP1: "Nova เป็นแอปแชตส่วนตัวสำหรับสองคน พัฒนาโดย AYFSOFT & Yusuf Avşar เพื่อการสื่อสารที่รวดเร็ว เรียบง่าย และปลอดภัย",
-    privacyP2: "ข้อความ สัญญาณการโทร โปรไฟล์ และสื่อของคุณถูกออกแบบให้มีความหมายเฉพาะกับคนที่อยู่ในห้องนี้ แอปรวมการแปลอัตโนมัติ อีโมจิ เสียง รูปภาพ ไฟล์ และวิดีโอคอลไว้ในประสบการณ์มือถือเดียว",
-    privacyP3: "เป้าหมายคือประสบการณ์แชตที่คุ้นเคย แต่เบากว่าในสไตล์ Nova: ภาพชัด ใช้อินเทอร์เน็ตน้อย แจ้งเตือนเร็ว หน้าจอเข้าใจง่าย และพื้นที่คุยที่ไม่รก",
+    privacyP1: "Nova เป็นแอปสำหรับการสนทนาและการโทรส่วนตัวระหว่างสองคน รวมแชต การโทรเสียง วิดีโอคอล การส่งสื่อ และการแปลไทย-ตุรกีไว้ในหน้าจอที่ใช้งานง่าย",
+    privacyP2: "ข้อความ สื่อ และสัญญาณการโทรถูกใช้เพื่อการสื่อสารของคนในบทสนทนานี้เท่านั้น การแจ้งเตือน การโทร และการแปลถูกออกแบบให้การสื่อสารรวดเร็ว ชัดเจน และเชื่อถือได้",
+    privacyP3: "แอปออกแบบมาสำหรับการใช้งานจริงทุกวัน: ใช้ข้อมูลน้อย คุณภาพสายชัด แจ้งเตือนเร็ว อ่านแชตง่าย และไม่มีสิ่งรบกวนเกินจำเป็น",
     understood: "เข้าใจแล้ว",
     realPeople: "ผู้ใช้จริง",
     personCount: "{count} คน",
@@ -389,7 +390,7 @@ const state = {
   joined: false,
   autoJoinAttempted: false,
   me: {
-    name: urlName || storedName,
+    name: urlName || storedName || authState.displayName,
     avatarUrl: urlAvatar || localStorage.getItem("pingle.avatar") || "",
   },
   persistProfile: !urlParams.has("noStore"),
@@ -1186,6 +1187,8 @@ function bindAuthUI() {
         localStorage.setItem(AUTH_USER_ID_KEY, authState.userId);
         if (res.user?.displayName) {
           localStorage.setItem(AUTH_DISPLAY_NAME_KEY, res.user.displayName);
+          localStorage.setItem("pingle.name", res.user.displayName);
+          state.me.name = res.user.displayName;
           authState.screen = "chat"; render(); initSocket();
         } else {
           authState.screen = "profile"; render();
@@ -1214,6 +1217,8 @@ function bindAuthUI() {
       if (res.ok) {
         authState.displayName = name;
         localStorage.setItem(AUTH_DISPLAY_NAME_KEY, name);
+        localStorage.setItem("pingle.name", name);
+        state.me.name = name;
         authState.screen = "chat"; render(); initSocket();
       } else { authState.error = res.error || "Hata"; render(); }
     });
@@ -1332,7 +1337,7 @@ function renderMessageItem(item) {
 }
 
 function renderMessages() {
-  const items = [...state.history, ...state.systemMessages].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+  const items = [...state.history].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
   return `
     <div class="message-list" id="messageList">
       <div class="date-pill">${t("today")}</div>
@@ -2504,7 +2509,11 @@ async function toggleScreenShare() {
   }
 }
 
-socket.on("server:hello", (payload) => {
+function registerSocketHandlers(activeSocket) {
+  if (!activeSocket) {
+    return;
+  }
+  activeSocket.on("server:hello", (payload) => {
   state.maxUsers = payload.maxUsers || 2;
   state.maxMessageLength = payload.maxMessageLength || 500;
   state.roomCodeRequired = Boolean(payload.roomCodeRequired);
@@ -2516,7 +2525,7 @@ socket.on("server:hello", (payload) => {
   render();
 });
 
-socket.on("connect", () => {
+activeSocket.on("connect", () => {
   state.connection = "online";
   if (state.joined && state.me.name) {
     state.joined = false;
@@ -2532,7 +2541,7 @@ socket.on("connect", () => {
   render();
 });
 
-socket.on("disconnect", () => {
+activeSocket.on("disconnect", () => {
   state.connection = "offline";
   if (state.call.inCall) {
     endCallLocal(t("connectionLost"));
@@ -2541,12 +2550,12 @@ socket.on("disconnect", () => {
   render();
 });
 
-socket.on("connect_error", () => {
+activeSocket.on("connect_error", () => {
   state.connection = "offline";
   render();
 });
 
-socket.on("message", (payload) => {
+activeSocket.on("message", (payload) => {
   upsertMessage(payload);
   if (!payload || payload.from === state.me.name) {
     render();
@@ -2557,12 +2566,12 @@ socket.on("message", (payload) => {
   render();
 });
 
-socket.on("message:update", (payload) => {
+activeSocket.on("message:update", (payload) => {
   upsertMessage(payload);
   render();
 });
 
-socket.on("offline:events", (payload) => {
+activeSocket.on("offline:events", (payload) => {
   const events = Array.isArray(payload?.events) ? payload.events : [];
   events.forEach((event) => {
     if (event.type === "message") {
@@ -2589,21 +2598,17 @@ socket.on("offline:events", (payload) => {
   }
 });
 
-socket.on("system", (payload) => {
-  state.systemMessages.push({ type: "system", ...payload });
-  if (state.systemMessages.length > 20) {
-    state.systemMessages.splice(0, state.systemMessages.length - 20);
-  }
-  render();
+activeSocket.on("system", (payload) => {
+  // System join/leave banners are hidden to keep the chat focused on messages.
 });
 
-socket.on("users", (payload) => {
+activeSocket.on("users", (payload) => {
   state.users = payload.users || [];
   state.maxUsers = payload.maxUsers || state.maxUsers;
   render();
 });
 
-socket.on("typing", ({ name, isTyping }) => {
+activeSocket.on("typing", ({ name, isTyping }) => {
   if (!name || name === state.me.name) {
     return;
   }
@@ -2611,7 +2616,7 @@ socket.on("typing", ({ name, isTyping }) => {
   render();
 });
 
-socket.on("call:offer", (payload) => {
+activeSocket.on("call:offer", (payload) => {
   if (!state.joined) {
     return;
   }
@@ -2636,11 +2641,11 @@ socket.on("call:offer", (payload) => {
   render();
 });
 
-socket.on("call:ringing", () => {
+activeSocket.on("call:ringing", () => {
   setCallStatus(t("callRinging"));
 });
 
-socket.on("call:answer", async (payload) => {
+activeSocket.on("call:answer", async (payload) => {
   if (!state.call.pc || !payload?.sdp) {
     return;
   }
@@ -2652,7 +2657,7 @@ socket.on("call:answer", async (payload) => {
   }
 });
 
-socket.on("call:ice-candidate", async (payload) => {
+activeSocket.on("call:ice-candidate", async (payload) => {
   if (!state.call.pc || !payload?.candidate) {
     return;
   }
@@ -2661,7 +2666,7 @@ socket.on("call:ice-candidate", async (payload) => {
   } catch {}
 });
 
-socket.on("call:end", (payload) => {
+activeSocket.on("call:end", (payload) => {
   const reason = payload?.reason || "ended";
   if (state.call.pendingOffer && reason !== "busy") {
     addCallLog({
@@ -2682,6 +2687,7 @@ socket.on("call:end", (payload) => {
   notifyUser(t("appName"), text, "call-ended");
   endCallLocal(text);
 });
+}
 
 async function preloadRtcConfig() {
   try {
@@ -2706,3 +2712,4 @@ window.addEventListener("blur", () => {
 
 preloadRtcConfig();
 render();
+initSocket();

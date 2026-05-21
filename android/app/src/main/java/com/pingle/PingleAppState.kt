@@ -31,6 +31,7 @@ data class ChatMessage(
 data class CallUiState(
     val visible: Boolean = false,
     val incoming: Boolean = false,
+    val minimized: Boolean = false,
     val mode: String = "video",
     val status: String = "Ready",
     val peerName: String = "",
@@ -60,6 +61,11 @@ class PingleAppState(
     var remoteFrameBitmap by mutableStateOf<String?>(null)
 
     private var socket: Socket? = null
+    private var remoteAudioHandler: ((String) -> Unit)? = null
+
+    val activeSocket: Socket? get() = socket
+    val currentConversationId: String get() = conversationId
+    val currentUserId: String get() = userId
 
     fun connect() {
         if (socket != null) return
@@ -119,6 +125,11 @@ class PingleAppState(
                 if (imageData.isNotBlank()) {
                     onUi { remoteFrameBitmap = imageData }
                 }
+            }
+            active.on("call:audio") { args ->
+                val payload = args.firstJson() ?: return@on
+                val audioData = payload.optString("audioData", "")
+                if (audioData.isNotBlank()) remoteAudioHandler?.invoke(audioData)
             }
             active.connect()
         }
@@ -228,6 +239,10 @@ class PingleAppState(
     fun toggleMute() { call = call.copy(muted = !call.muted) }
     fun toggleCamera() { call = call.copy(cameraEnabled = !call.cameraEnabled) }
     fun toggleSpeaker() { call = call.copy(speakerEnabled = !call.speakerEnabled) }
+
+    fun setRemoteAudioHandler(handler: ((String) -> Unit)?) {
+        remoteAudioHandler = handler
+    }
 
     fun sendCallFrame(imageData: String) {
         socket?.emit("call:frame", JSONObject()

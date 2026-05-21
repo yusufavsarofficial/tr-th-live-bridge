@@ -37,6 +37,7 @@ class VideoCallManager(
     private var isCapturing = false
     private var isMuted = false
     private var cameraEnabled = true
+    private var lastVideoFrameAt = 0L
     private var audioRecord: AudioRecord? = null
     private var audioTrack: AudioTrack? = null
     private var isCallActive = false
@@ -80,11 +81,17 @@ class VideoCallManager(
             .build()
             .also { analysis ->
                 analysis.setAnalyzer(executor) { imageProxy ->
+                    val now = System.currentTimeMillis()
+                    if (now - lastVideoFrameAt < 250L || !cameraEnabled) {
+                        imageProxy.close()
+                        return@setAnalyzer
+                    }
                     if (isCapturing) {
                         imageProxy.close()
                         return@setAnalyzer
                     }
                     isCapturing = true
+                    lastVideoFrameAt = now
                     val bitmap = imageProxyToBitmap(imageProxy)
                     imageProxy.close()
                     if (bitmap != null) {
@@ -104,10 +111,17 @@ class VideoCallManager(
 
     private fun imageProxyToBitmap(image: ImageProxy): Bitmap? {
         return try {
-            val buffer = image.planes[0].buffer
-            val bytes = ByteArray(buffer.remaining())
-            buffer.get(bytes)
-            val yuvImage = YuvImage(bytes, ImageFormat.NV21, image.width, image.height, null)
+            val yBuffer = image.planes[0].buffer
+            val uBuffer = image.planes[1].buffer
+            val vBuffer = image.planes[2].buffer
+            val ySize = yBuffer.remaining()
+            val uSize = uBuffer.remaining()
+            val vSize = vBuffer.remaining()
+            val nv21 = ByteArray(ySize + uSize + vSize)
+            yBuffer.get(nv21, 0, ySize)
+            vBuffer.get(nv21, ySize, vSize)
+            uBuffer.get(nv21, ySize + vSize, uSize)
+            val yuvImage = YuvImage(nv21, ImageFormat.NV21, image.width, image.height, null)
             val out = ByteArrayOutputStream()
             yuvImage.compressToJpeg(android.graphics.Rect(0, 0, image.width, image.height), 50, out)
             val jpegData = out.toByteArray()
@@ -116,7 +130,7 @@ class VideoCallManager(
     }
 
     private fun sendVideoFrame(bitmap: Bitmap) {
-        if (!isCallActive) return
+        if (!isCallActive || !cameraEnabled) return
         val stream = ByteArrayOutputStream()
         bitmap.compress(Bitmap.CompressFormat.JPEG, 40, stream)
         val base64 = Base64.encodeToString(stream.toByteArray(), Base64.NO_WRAP)
