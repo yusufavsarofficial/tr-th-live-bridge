@@ -31,7 +31,7 @@ android {
 
     buildTypes {
         debug {
-            buildConfigField "String", "BACKEND_URL", "\"http://192.168.1.9:3000\""
+            buildConfigField "String", "BACKEND_URL", "\"https://tr-th-live-bridge.onrender.com\""
         }
         release {
             minifyEnabled false
