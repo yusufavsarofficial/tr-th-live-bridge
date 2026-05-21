@@ -11,6 +11,7 @@ RUN node scripts/setup-prisma.js
 
 FROM node:20-alpine
 WORKDIR /app
+ENV DB_PROVIDER=postgresql
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/server.js ./
@@ -21,5 +22,5 @@ COPY --from=builder /app/prisma.config.ts ./
 
 EXPOSE ${PORT:-3000}
 
-# Run migrations and start
-CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]
+# Sync the fresh Render PostgreSQL database and start
+CMD ["sh", "-c", "npx prisma db push && node server.js"]

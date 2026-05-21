@@ -7,7 +7,9 @@ function getPrisma() {
   if (!_prisma) {
     const provider = process.env.DB_PROVIDER || "sqlite";
     if (provider === "postgresql") {
-      _prisma = new PrismaClient();
+      const { PrismaPg } = require("@prisma/adapter-pg");
+      const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+      _prisma = new PrismaClient({ adapter });
     } else {
       const { PrismaBetterSqlite3 } = require("@prisma/adapter-better-sqlite3");
       const dbPath = path.join(__dirname, "..", "..", "dev.db");
