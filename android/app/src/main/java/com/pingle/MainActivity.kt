@@ -92,17 +92,7 @@ private fun AppNavigationContent(
     fun loadConversations() {
         if (token.isEmpty()) return
         scope.launch {
-            var result = withContext(Dispatchers.IO) { api.getConversations(token) }
-            // Auto-create conversation with the other whitelisted user
-            if (result.isEmpty() && phoneNumber.isNotBlank()) {
-                val otherPhone = if (phoneNumber.startsWith("+90")) "+66642177978" else "+905514883842"
-                val searchResult = withContext(Dispatchers.IO) { api.searchUsers(token, otherPhone) }
-                val otherUser = searchResult.firstOrNull()
-                if (otherUser != null) {
-                    withContext(Dispatchers.IO) { api.createConversation(token, otherUser.id) }
-                    result = withContext(Dispatchers.IO) { api.getConversations(token) }
-                }
-            }
+            val result = withContext(Dispatchers.IO) { api.getConversations(token) }
             conversations = result
         }
     }

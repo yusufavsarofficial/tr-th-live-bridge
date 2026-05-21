@@ -37,6 +37,22 @@ function createAuthRouter(storage) {
 
     const lang = phoneNumber?.startsWith("+66") ? "th" : phoneNumber?.startsWith("+90") ? "tr" : "en";
     const token = createToken(user);
+
+    // Auto-create conversation between the 2 whitelisted users if both exist
+    if (ALLOWED_USERS.length === 2) {
+      const otherPhone = ALLOWED_USERS.find(p => p !== phoneNumber);
+      if (otherPhone) {
+        const otherUser = await storage.findUserByPhone(otherPhone);
+        if (otherUser) {
+          const existingConvs = await storage.getConversations(user.id);
+          const alreadyHasConv = existingConvs.some(c => c.otherUser?.id === otherUser.id);
+          if (!alreadyHasConv) {
+            try { await storage.createConversation([user.id, otherUser.id]); } catch (_) { /* already exists */ }
+          }
+        }
+      }
+    }
+
     res.json({
       ok: true,
       token,
