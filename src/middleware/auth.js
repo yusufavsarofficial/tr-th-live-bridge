@@ -20,7 +20,8 @@ function socketAuth(socket, next) {
   if (token) {
     const payload = verifyToken(token);
     if (payload) {
-      socket.user = payload;
+      socket.data = socket.data || {};
+      socket.data.user = payload;
     }
   }
   next();

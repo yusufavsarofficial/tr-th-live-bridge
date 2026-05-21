@@ -83,7 +83,7 @@ npm run pack:apk:release
 | `NOTIFICATION_FILE` | ./data/notification-state.json | Push subscription file |
 | `OPENAI_API_KEY` | — | OpenAI API key for translations |
 | `OPENAI_TRANSLATE_MODEL` | gpt-4.1-mini | OpenAI model |
-| `TRANSLATION_PROVIDER` | openai-first | `openai-first` or `legacy` |
+| `TRANSLATION_PROVIDER` | legacy | `legacy` (Google-first) or `openai-first` |
 | `ROOM_CODE` | — | Optional room access code |
 | `ROOM_PIN` | — | Optional room PIN |
 

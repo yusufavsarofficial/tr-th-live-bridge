@@ -147,47 +147,6 @@ function createConversationHandlers(io, storage, fcmPushService) {
     }
   }
 
-  function handleConversationMessage(socket, payload, ack) {
-    const userId = socket.data?.user?.sub;
-    if (!userId) return ack?.({ ok: false, error: "Not authenticated" });
-
-    const convId = String(payload?.conversationId || "").trim();
-    if (!convId) return ack?.({ ok: false, error: "conversationId required" });
-
-    const conv = storage.getConversationById(convId);
-    if (!conv || !conv.participants.includes(userId)) return ack?.({ ok: false, error: "Not a participant" });
-
-    const user = storage.findUserById(userId);
-    const rawText = String(payload?.text || "").trim();
-    const imageData = String(payload?.imageData || "").trim();
-
-    if (!rawText && !imageData) return ack?.({ ok: false, error: "Message text or image required" });
-    if (imageData && !imageData.startsWith("data:image/")) return ack?.({ ok: false, error: "Invalid image data" });
-
-    const message = {
-      id: crypto.randomUUID(),
-      conversationId: convId,
-      from: userId,
-      fromName: user?.displayName || user?.phoneNumber || "Unknown",
-      text: rawText.slice(0, 4000),
-      imageData: imageData || null,
-      timestamp: Date.now(),
-      status: "sent",
-    };
-
-    storage.saveMessage(convId, message);
-    storage.updateConversation(convId, {
-      lastMessage: rawText.slice(0, 100) || (imageData ? "📷 Photo" : ""),
-      lastMessageSender: userId,
-      unreadCount: buildUnreadCount(conv, userId),
-    });
-
-    const room = `conv:${convId}`;
-    io.to(room).emit("conversation:message", message);
-
-    ack?.({ ok: true, id: message.id, timestamp: message.timestamp });
-  }
-
   function handleConversationTyping(socket, payload) {
     const userId = socket.data?.user?.sub;
     if (!userId) return;
@@ -205,27 +164,6 @@ function createConversationHandlers(io, storage, fcmPushService) {
     });
   }
 
-  function handleConversationRead(socket, payload) {
-    const userId = socket.data?.user?.sub;
-    if (!userId) return;
-
-    const convId = String(payload?.conversationId || "").trim();
-    if (!convId) return;
-
-    const conv = storage.getConversationById(convId);
-    if (!conv) return;
-
-    const unreadCount = { ...(conv.unreadCount || {}) };
-    unreadCount[userId] = 0;
-    storage.updateConversation(convId, { unreadCount });
-
-    io.to(`conv:${convId}`).emit("conversation:read", {
-      conversationId: convId,
-      userId,
-      timestamp: Date.now(),
-    });
-  }
-
   function buildUnreadCount(conv, senderId) {
     const current = { ...(conv.unreadCount || {}) };
     for (const pid of conv.participants) {
@@ -234,23 +172,6 @@ function createConversationHandlers(io, storage, fcmPushService) {
       }
     }
     return current;
-  }
-
-  function handleCallOffer(socket, payload, ack) {
-    const userId = socket.data?.user?.sub;
-    if (!userId) return ack?.({ ok: false, error: "Not authenticated" });
-    const convId = String(payload?.conversationId || "").trim();
-    if (!convId) return ack?.({ ok: false, error: "conversationId required" });
-    const user = storage.findUserById(userId);
-    const room = `conv:${convId}`;
-    socket.to(room).emit("call:offer", {
-      conversationId: convId,
-      from: userId,
-      fromName: user?.displayName || user?.phoneNumber || "Unknown",
-      mode: payload?.mode || "video",
-      timestamp: Date.now(),
-    });
-    ack?.({ ok: true });
   }
 
   function handleCallAnswer(socket, payload, ack) {
