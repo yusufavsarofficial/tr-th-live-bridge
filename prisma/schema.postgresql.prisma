@@ -64,6 +64,8 @@ model Message {
   from           String
   fromName       String
   text           String   @default("")
+  translatedText String?
+  sourceLang     String?
   imageData      String?
   timestamp      BigInt
   status         String   @default("sent")
