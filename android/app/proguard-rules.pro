@@ -1,1 +1,0 @@
-# Pingle release rules placeholder.
